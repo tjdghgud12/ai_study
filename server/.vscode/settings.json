@@ -1,0 +1,10 @@
+{
+    "[python]": {
+      "editor.defaultFormatter": "charliermarsh.ruff", // 이 ID가 정확해야 합니다.
+      "editor.formatOnSave": true,
+      "editor.codeActionsOnSave": {
+        "source.fixAll.ruff": "explicit",
+        "source.organizeImports.ruff": "explicit"
+      }
+    }
+  }

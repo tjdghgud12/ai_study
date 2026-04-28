@@ -1,0 +1,20 @@
+{
+    "version": "0.1.0",
+    "configurations": [
+        {
+            "name": "Fast API (Poetry)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "fastapi", // FastAPI 모듈을 실행
+            "args": [
+                "dev",
+                "main.py",
+                "--port", "9501"
+            ],
+            "justMyCode": true,
+            "cwd": "${workspaceFolder:server}",
+            "envFile": "${workspaceFolder:server}/.env", // .env 파일을 자동으로 로드
+            "python": "${command:python.interpreterPath}" // 핵심: 현재 선택된 인터프리터(Poetry) 사용
+        }
+    ]
+}
