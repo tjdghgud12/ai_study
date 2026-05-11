@@ -13,5 +13,4 @@ def read_root():
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat_with_agent(request: ChatRequest):
-    response = await cat_agent.ask_question(request.message)
-    return ChatResponse(**response)
+    return await cat_agent.ask_question(request.message, request.session_id)

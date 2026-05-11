@@ -1,18 +1,22 @@
-import json
+import uuid
 
+from fastapi import HTTPException
 from langchain.agents import create_agent
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from core.config import settings
+from schemas.chat_schema import ChatResponse
 
 
 class CatAgentService:
     def __init__(self):
-        self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash", google_api_key=settings.google_api_key
+        model = ChatGoogleGenerativeAI(
+            **settings.main_llm_config, google_api_key=settings.google_api_key
         )
+        self.llm = model
         self.tools = [TavilySearchResults(api_key=settings.tavily_api_key)]
+
         self.system_prompt = """
         You are 'Cat Care Agent', a professional cat care specialist.
 
@@ -38,92 +42,42 @@ class CatAgentService:
             model=self.llm,
             tools=self.tools,
             system_prompt=self.system_prompt,
+            response_format=ChatResponse,
         )
 
         print(f"Create {settings.project_name} Agent!!")
 
-    async def ask_question(self, user_input: str) -> dict:
-        result = await self.agent.ainvoke({"messages": [{"role": "user", "content": user_input}]})
-        messages = result.get("messages", [])
-        if not messages:
-            return {
-                "chat_reply": "죄송해요. 답변을 생성하지 못했어요.",
-                "used_tools": [],
-                "tool_data": {},
-                "search_sources": [],
-            }
+    async def ask_question(self, user_input: str, session_id: str | None = None) -> ChatResponse:
+        last_error: Exception | None = None
 
-        tool_data = self._extract_tool_data(messages)
-        used_tools = list(tool_data.keys())
-        return {
-            "chat_reply": self._stringify_content(messages[-1].content),
-            "used_tools": used_tools,
-            "tool_data": tool_data,
-            "search_sources": self._extract_search_sources(tool_data),
-        }
+        if session_id is None:
+            session_id = self.create_session_id()
 
-    def _stringify_content(self, content: object) -> str:
-        if isinstance(content, str):
-            return content
-        if isinstance(content, list):
-            text_parts: list[str] = []
-            for part in content:
-                if isinstance(part, str):
-                    text_parts.append(part)
-                    continue
-                if isinstance(part, dict) and part.get("type") == "text":
-                    text = part.get("text")
-                    if isinstance(text, str):
-                        text_parts.append(text)
-            if text_parts:
-                return "\n".join(text_parts).strip()
-        return "죄송해요. 답변을 텍스트로 변환하지 못했어요."
+        for _ in range(2):  # 최초 1회 + 재시도 1회
+            try:
+                result = await self.agent.ainvoke(
+                    {"messages": [{"role": "user", "content": user_input}]}
+                )
+                structured = result.get("structured_response")
 
-    def _extract_tool_data(self, messages: list) -> dict[str, list[dict]]:
-        tool_data: dict[str, list[dict]] = {}
-        for message in messages:
-            if getattr(message, "type", "") != "tool":
-                continue
+                if structured is None:
+                    raise ValueError("Missing structured_response")
+                if isinstance(structured, ChatResponse):
+                    return structured.model_copy(update={"session_id": session_id})
+                if isinstance(structured, dict):
+                    return ChatResponse.model_validate({**structured, "session_id": session_id})
 
-            tool_name = str(getattr(message, "name", "unknown_tool"))
-            content = getattr(message, "content", "")
-            normalized_output: object = self._normalize_tool_output(content)
+                raise ValueError("structured_response must be ChatResponse or dict")
+            except Exception as exc:
+                last_error = exc
 
-            payload = {
-                "call_id": getattr(message, "tool_call_id", None),
-                "output": normalized_output,
-            }
-            tool_data.setdefault(tool_name, []).append(payload)
-        return tool_data
+        raise HTTPException(
+            status_code=502,
+            detail=f"Upstream model returned an invalid structured response: {last_error}",
+        )
 
-    def _normalize_tool_output(self, content: object) -> object:
-        if isinstance(content, list):
-            return content
-        if isinstance(content, str):
-            stripped = content.strip()
-            if stripped.startswith("{") or stripped.startswith("["):
-                try:
-                    return json.loads(stripped)
-                except json.JSONDecodeError:
-                    return content
-        return content
-
-    def _extract_search_sources(self, tool_data: dict[str, list[dict]]) -> list[str]:
-        sources: list[str] = []
-        for tool_name, calls in tool_data.items():
-            if "tavily" not in tool_name.lower():
-                continue
-            for call in calls:
-                output = call.get("output")
-                if not isinstance(output, list):
-                    continue
-                for item in output:
-                    if not isinstance(item, dict):
-                        continue
-                    url = item.get("url")
-                    if isinstance(url, str) and url not in sources:
-                        sources.append(url)
-        return sources
+    def create_session_id(self) -> str:
+        return str(uuid.uuid4())
 
 
 cat_agent = CatAgentService()
