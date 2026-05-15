@@ -1,11 +1,29 @@
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api import router
 from core.config import settings
+from services.chat_service import cat_agent
+
+logging.getLogger("langchain_google_genai").setLevel(logging.ERROR)
 
 app = FastAPI()
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    try:
+        await cat_agent.create_cat_agent()
+        print(f"✅ Successfully Created {settings.project_name}")
+        yield
+    except Exception as e:
+        print(f"❌ Error creating {settings.project_name}: {e}")
+
+
+app = FastAPI(lifespan=lifespan)
 
 origins = [
     url

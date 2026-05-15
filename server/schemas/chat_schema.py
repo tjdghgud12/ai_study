@@ -15,4 +15,3 @@ class ChatResponse(BaseSchema):
     chat_reply: str
     used_tools: list[str] = Field(default_factory=list)
     tool_data: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
-    search_sources: list[str] = Field(default_factory=list)
