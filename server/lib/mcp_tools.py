@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -22,9 +23,9 @@ class McpTools:
 
         self._brave_client = MultiServerMCPClient(
             {
-                "math": {
+                "brave": {
                     "transport": "stdio",
-                    "command": "python",
+                    "command": sys.executable,
                     "args": [str(SERVER_ROOT / "local_mcp_server" / "brave_mcp_server.py")],
                     "env": {
                         "BRAVE_SEARCH_API_KEY": mcp_settings.brave_search_api_key,
