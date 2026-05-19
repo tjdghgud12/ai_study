@@ -1,3 +1,5 @@
+import json
+import re
 import uuid
 from typing import Any
 
@@ -13,6 +15,9 @@ from schemas.llm_response_schema import LlmResponse, RouterResponse
 
 
 class CatAgentService:
+    ANCHOR_PATTERN = re.compile(r"\{\{\{([^|]+)\|([^}]+)\}\}\}")
+    BARE_URL_PATTERN = re.compile(r'https?://[^\s\]\)\'"<>]+')
+
     def __init__(self):
         model = ChatGoogleGenerativeAI(
             **settings.main_llm_config, google_api_key=settings.google_api_key
@@ -35,6 +40,23 @@ class CatAgentService:
         4. Prefer authoritative sources for health topics (vets, official orgs).
         5. For shopping requests, list items with title and URL from tool results.
         6. Do not expose chain-of-thought.
+        7. If chat_reply contains any URL, it MUST use anchor token format.
+
+        URL Anchor Token Rules:
+        - Every URL must be wrapped in this exact format: {{{title|url}}}
+            - title: tool response에서 가져온 원본 title
+            - url: tool response에서 가져온 정확한 URL
+
+        - Examples (title must be the exact "title" field from tool results, not your summary):
+        ✅ {{{Cat Food: Best Cat Food from Top Brands on Chewy|https://www.chewy.com/b/food-387}}}
+        ❌ {{{고양이 사료 추천|https://www.chewy.com/b/food-387}}}  (paraphrased title)
+        ❌ https://example.com/cat-supplement
+        ❌ [고양이 영양제 추천](https://example.com/cat-supplement)
+
+        - Never use bare URLs (https://...) outside of anchor tokens.
+        - Never use markdown link format [text](url).
+        - Never fabricate URLs. Only use URLs that appear in tool response.
+        - Violation of these rules will result in your entire response being discarded.
 
         The server will attach used_tools, tool_data, and search_sources from tool output.
         Focus on writing a clear, accurate chat_reply.
@@ -82,7 +104,6 @@ class CatAgentService:
         """
 
     async def create_cat_agent(self):
-        # tavily_tools = await McpTools().get_tavily_tools()
         brave_tools = await McpTools().get_brave_tools()
         self._search_agent = create_agent(
             model=self.llm,
@@ -117,23 +138,25 @@ class CatAgentService:
             else self._no_search_agent
         )
 
-        for _ in range(1):  # 최초 1회 + 재시도 1회
+        for _ in range(3):  # 최초 1회 + 재시도 1회
             try:
                 result = await cat_agent.ainvoke(
                     {"messages": [{"role": "user", "content": user_input}]}
                 )
-                _used_tools = self._parse_llm_messages(result.get("messages"))
 
-                structured = result.get("structured_response")
+                structured_response = result.get("structured_response")
 
-                if structured is None:
+                if self._filter_chat_reply_not_allow_url(structured_response.chat_reply):
+                    continue
+                if structured_response is None:
                     raise ValueError("Missing structured_response")
-                if isinstance(structured, ChatResponse):
-                    return structured.model_copy(update={"session_id": session_id})
-                if isinstance(structured, dict):
-                    return ChatResponse.model_validate({**structured, "session_id": session_id})
+                return_data = self._parse_llm_messages(
+                    structured_response.chat_reply, result.get("messages")
+                )
+                return_data.session_id = session_id
 
-                raise ValueError("structured_response must be ChatResponse or dict")
+                return return_data
+
             except Exception as exc:
                 last_error = exc
 
@@ -145,10 +168,79 @@ class CatAgentService:
     def create_session_id(self) -> str:
         return str(uuid.uuid4())
 
-    def _parse_llm_messages(self, chat_reply: str, messages: list[Any]) -> list[ToolMessage]:
-        return [
+    def _parse_brave_tool_payload(self, tool: ToolMessage) -> dict[str, Any] | None:
+        content = tool.content
+        if isinstance(content, str):
+            text = content
+        elif isinstance(content, list):
+            text = "".join(
+                block.get("text", "")
+                for block in content
+                if isinstance(block, dict) and block.get("type") == "text"
+            )
+        else:
+            return None
+
+        if not text or text.startswith("Error"):
+            return None
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            return None
+
+    def _extract_brave_urls(self, tool: ToolMessage) -> dict[str, str]:
+        payload = self._parse_brave_tool_payload(tool)
+        if not payload:
+            return {}
+
+        url_by_title: dict[str, str] = {}
+        for item in payload.get("results") or []:
+            title, url = item.get("title"), item.get("url")
+            if title and url:
+                url_by_title[title] = url
+
+        for url, meta in (payload.get("sources") or {}).items():
+            title = (meta or {}).get("title")
+            if title and url:
+                url_by_title.setdefault(title, url)
+
+        return url_by_title
+
+    def _parse_llm_messages(self, chat_reply: str, messages: list[Any]) -> ChatResponse:
+        used_tools = [
             m for m in messages if isinstance(m, ToolMessage) and m.name != LlmResponse.__name__
         ]
+        tool_names = []
+        tool_data = {}
+
+        for tool in used_tools:
+            tool_names.append(tool.name)
+            if tool.name == "brave_search":
+                url_dict: dict[str, str] = self._extract_brave_urls(tool)
+                chat_urls = re.findall(r"\{\{\{([^|]+)\|([^}]+)\}\}\}", chat_reply)
+                for title, url in chat_urls:
+                    braveUrl = url_dict.get(title)
+                    if braveUrl is None:
+                        chat_reply = chat_reply.replace(
+                            f"{{{{{title}|{url}}}}}", "URL 오류로 인해 삭제되었습니다."
+                        )
+                    else:
+                        chat_reply = chat_reply.replace(
+                            f"{{{{{title}|{url}}}}}", f"{{{{{title}|{braveUrl}}}}}"
+                        )
+                tool_data[tool.name] = url_dict
+
+        chat_reply = chat_reply.replace("{{{", "").replace("}}}", "")
+
+        return ChatResponse(
+            session_id="", chat_reply=chat_reply, used_tools=tool_names, tool_data=tool_data
+        )
+
+    def _filter_chat_reply_not_allow_url(self, chat_reply: str) -> bool:
+        ANCHOR_PATTERN = re.compile(r"\{\{\{([^|]+)\|([^}]+)\}\}\}")
+        BARE_URL = re.compile(r'https?://[^\s\]\)\'"<>]+')
+        cleaned = ANCHOR_PATTERN.sub("", chat_reply)
+        return bool(BARE_URL.search(cleaned))
 
 
 cat_agent = CatAgentService()

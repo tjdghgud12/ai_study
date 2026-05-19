@@ -76,7 +76,7 @@ def _format_llm_context(data: dict) -> dict:
 
 
 @mcp.tool()
-async def brave_search(query: str, count: int = 5) -> str:
+async def brave_search(query: str, count: int = 10) -> str:
     if not BRAVE_SEARCH_API_KEY:
         return "Error: BRAVE_SEARCH_API_KEY is not set."
 
@@ -107,8 +107,7 @@ async def brave_search(query: str, count: int = 5) -> str:
                     return f"Error({response.status_code}): Brave Search API Key is invalid."
                 if response.status_code == 429:
                     return (
-                        f"Error({response.status_code}): "
-                        "Brave Search API request limit exceeded."
+                        f"Error({response.status_code}): Brave Search API request limit exceeded."
                     )
                 if response.status_code == 200:
                     data = response.json()
