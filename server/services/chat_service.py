@@ -72,11 +72,6 @@ class CatAgentService:
         Rules:
         - Answer from established cat care knowledge only.
         - Do NOT claim you searched the web.
-        - Do NOT provide product purchase links or current prices.
-        - If the user asks for shopping links, live prices, or latest news,
-        say that a web search is required and you cannot provide verified links
-        in this mode. (In practice, router should send those to search agent;
-        this is a safety net.)
 
         - Urgent symptoms → recommend vet immediately.
         - Do not diagnose with certainty.
