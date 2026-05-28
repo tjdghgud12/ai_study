@@ -1,16 +1,17 @@
 import json
 import re
 import uuid
+from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import HTTPException
 from langchain.agents import create_agent
-from langchain_core.messages import ToolMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, ToolMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from core.config import settings
 from lib.mcp_tools import McpTools
-from schemas.chat_schema import ChatResponse
+from schemas.chat_schema import ChatResponse, ChatStreamDelta, ChatStreamDone, ChatStreamError
 from schemas.llm_response_schema import LlmResponse, RouterResponse
 
 
@@ -20,7 +21,9 @@ class CatAgentService:
 
     def __init__(self):
         model = ChatGoogleGenerativeAI(
-            **settings.main_llm_config, google_api_key=settings.google_api_key
+            **settings.main_llm_config,
+            google_api_key=settings.google_api_key,
+            streaming=True,
         )
         self.llm = model
         self.router_llm = ChatGoogleGenerativeAI(
@@ -41,6 +44,7 @@ class CatAgentService:
         5. For shopping requests, list items with title and URL from tool results.
         6. Do not expose chain-of-thought.
         7. If chat_reply contains any URL, it MUST use anchor token format.
+        8. Write chat_reply in clean Markdown (headings/lists/code blocks when helpful).
 
         URL Anchor Token Rules:
         - Every URL must be wrapped in this exact format: {{{title|url}}}
@@ -77,6 +81,7 @@ class CatAgentService:
         - Urgent symptoms → recommend vet immediately.
         - Do not diagnose with certainty.
         - Do not expose chain-of-thought.
+        - Write chat_reply in clean Markdown (headings/lists/code blocks when helpful).
 
         Output chat_reply only (other fields are filled by the server).
         """
@@ -121,6 +126,16 @@ class CatAgentService:
             system_prompt=self.router_system_prompt,
             response_format=RouterResponse,
         )
+        # structured output 사용 시 Gemini는 토큰 스트림 대신 마지막 ToolMessage로만 응답함
+        self._search_stream_agent = create_agent(
+            model=self.llm,
+            tools=brave_tools,
+            system_prompt=self.search_system_prompt,
+        )
+        self._no_search_stream_agent = create_agent(
+            model=self.llm,
+            system_prompt=self.no_search_system_prompt,
+        )
 
     async def ask_question(self, user_input: str, session_id: str | None = None) -> ChatResponse:
         last_error: Exception | None = None
@@ -164,6 +179,64 @@ class CatAgentService:
             status_code=502,
             detail=f"Upstream model returned an invalid structured response: {last_error}",
         )
+
+    async def ask_question_stream(
+        self, user_input: str, session_id: str | None = None
+    ) -> AsyncIterator[str]:
+        if session_id is None:
+            session_id = self.create_session_id()
+
+        need_search = await self._router_agent.ainvoke(
+            {"messages": [{"role": "user", "content": user_input}]}
+        )
+        cat_agent = (
+            self._search_stream_agent
+            if need_search.get("structured_response").use_search_tool
+            else self._no_search_stream_agent
+        )
+
+        all_messages: list[Any] = []
+        chat_reply = ""
+
+        async for mode, chunk in cat_agent.astream(
+            {"messages": [{"role": "user", "content": user_input}]},
+            stream_mode=["messages", "updates"],
+        ):
+            if mode == "messages":
+                token, _meta = chunk
+                if not isinstance(token, AIMessageChunk):
+                    continue
+                delta = self._message_content_to_str(token)
+                if not delta:
+                    continue
+                chat_reply += delta
+                yield ChatStreamDelta(chat_reply=delta).model_dump_json() + "\n"
+            elif mode == "updates":
+                for update in chunk.values():
+                    if msgs := update.get("messages"):
+                        all_messages = msgs
+
+        if not chat_reply:
+            chat_reply = self._last_ai_reply(all_messages) or ""
+
+        if not chat_reply:
+            yield ChatStreamError(
+                detail="Upstream model returned an empty response"
+            ).model_dump_json() + "\n"
+            return
+
+        if self._filter_chat_reply_not_allow_url(chat_reply):
+            yield (
+                ChatStreamError(
+                    detail="Response contained bare URLs outside anchor tokens"
+                ).model_dump_json()
+                + "\n"
+            )
+            return
+
+        final = self._parse_llm_messages(chat_reply, all_messages)
+        final.session_id = session_id
+        yield ChatStreamDone(**final.model_dump()).model_dump_json() + "\n"
 
     def create_session_id(self) -> str:
         return str(uuid.uuid4())
@@ -241,6 +314,29 @@ class CatAgentService:
         BARE_URL = re.compile(r'https?://[^\s\]\)\'"<>]+')
         cleaned = ANCHOR_PATTERN.sub("", chat_reply)
         return bool(BARE_URL.search(cleaned))
+
+    @staticmethod
+    def _last_ai_reply(messages: list[Any]) -> str | None:
+        for message in reversed(messages):
+            if not isinstance(message, (AIMessage, AIMessageChunk)):
+                continue
+            text = CatAgentService._message_content_to_str(message)
+            if text:
+                return text
+        return None
+
+    @staticmethod
+    def _message_content_to_str(message: BaseMessage) -> str:
+        content = message.content
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            return "".join(
+                block.get("text", "")
+                for block in content
+                if isinstance(block, dict) and block.get("type") == "text"
+            )
+        return str(content) if content else ""
 
 
 cat_agent = CatAgentService()
