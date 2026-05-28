@@ -1,0 +1,32 @@
+{
+  "version": "0.1.0",
+  "configurations": [
+    {
+      "name": "Next Server",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm run dev",
+      "cwd": "${workspaceFolder}",
+      "skipFiles": [
+        "<node_internals>/**",
+        "${workspaceFolder}/node_modules/**",
+        "${workspaceFolder}/.next/**"
+      ],
+      "sourceMaps": true
+    },
+    {
+      "name": "launch to Chrome",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:9500",
+      "webRoot": "${workspaceFolder}/src",
+      "sourceMaps": true
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Next Process",
+      "configurations": ["Next Server", "launch to Chrome"]
+    }
+  ]
+}
