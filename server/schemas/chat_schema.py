@@ -20,13 +20,16 @@ class ChatResponse(BaseSchema):
 
 class ChatStreamDelta(BaseSchema):
     type: Literal["delta"] = "delta"
+    message_id: str
     chat_reply: str
 
 
 class ChatStreamDone(ChatResponse):
     type: Literal["done"] = "done"
+    message_id: str
 
 
 class ChatStreamError(BaseSchema):
     type: Literal["error"] = "error"
+    message_id: str
     detail: str

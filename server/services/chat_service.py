@@ -185,6 +185,7 @@ class CatAgentService:
     ) -> AsyncIterator[str]:
         if session_id is None:
             session_id = self.create_session_id()
+        message_id = self.create_message_id()
 
         need_search = await self._router_agent.ainvoke(
             {"messages": [{"role": "user", "content": user_input}]}
@@ -210,7 +211,10 @@ class CatAgentService:
                 if not delta:
                     continue
                 chat_reply += delta
-                yield ChatStreamDelta(chat_reply=delta).model_dump_json() + "\n"
+                delta_event = ChatStreamDelta(message_id=message_id, chat_reply=delta)
+                yield (
+                    delta_event.model_dump_json() + "\n"
+                )
             elif mode == "updates":
                 for update in chunk.values():
                     if msgs := update.get("messages"):
@@ -221,6 +225,7 @@ class CatAgentService:
 
         if not chat_reply:
             yield ChatStreamError(
+                message_id=message_id,
                 detail="Upstream model returned an empty response"
             ).model_dump_json() + "\n"
             return
@@ -228,6 +233,7 @@ class CatAgentService:
         if self._filter_chat_reply_not_allow_url(chat_reply):
             yield (
                 ChatStreamError(
+                    message_id=message_id,
                     detail="Response contained bare URLs outside anchor tokens"
                 ).model_dump_json()
                 + "\n"
@@ -236,9 +242,12 @@ class CatAgentService:
 
         final = self._parse_llm_messages(chat_reply, all_messages)
         final.session_id = session_id
-        yield ChatStreamDone(**final.model_dump()).model_dump_json() + "\n"
+        yield ChatStreamDone(message_id=message_id, **final.model_dump()).model_dump_json() + "\n"
 
     def create_session_id(self) -> str:
+        return str(uuid.uuid4())
+
+    def create_message_id(self) -> str:
         return str(uuid.uuid4())
 
     def _parse_brave_tool_payload(self, tool: ToolMessage) -> dict[str, Any] | None:
