@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import * as z from "zod";
 
-import ApiStatusIcon from "@/app/login/ApiStatusIcon";
+import ApiStatusIcon from "@/app/signin/ApiStatusIcon";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,7 @@ const formSchema = z.object({
   password: z.string(),
 });
 
-const Login = () => {
+const Signin = () => {
   const router = useRouter();
   const [seePassword, setSeePassword] = useState(false);
 
@@ -95,4 +95,4 @@ const Login = () => {
   );
 };
 
-export default Login;
+export default Signin;
