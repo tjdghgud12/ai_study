@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     dev_frontend_url: str
     brave_search_api_key: str
 
+    supabase_publishable_key: str
+    supabase_database_url: str
+
     project_name: str = "Cat AI Agent"
 
     # gemma-4-31b-it
