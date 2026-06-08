@@ -207,9 +207,7 @@ class CatAgentService:
                     continue
                 chat_reply += delta
                 delta_event = ChatStreamDelta(message_id=message_id, chat_reply=delta)
-                yield (
-                    delta_event.model_dump_json() + "\n"
-                )
+                yield (delta_event.model_dump_json() + "\n")
             elif mode == "updates":
                 for update in chunk.values():
                     if msgs := update.get("messages"):
@@ -219,17 +217,19 @@ class CatAgentService:
             chat_reply = self._last_ai_reply(all_messages) or ""
 
         if not chat_reply:
-            yield ChatStreamError(
-                message_id=message_id,
-                detail="Upstream model returned an empty response"
-            ).model_dump_json() + "\n"
+            yield (
+                ChatStreamError(
+                    message_id=message_id, detail="Upstream model returned an empty response"
+                ).model_dump_json()
+                + "\n"
+            )
             return
 
         if self._filter_chat_reply_not_allow_url(chat_reply):
             yield (
                 ChatStreamError(
                     message_id=message_id,
-                    detail="Response contained bare URLs outside anchor tokens"
+                    detail="Response contained bare URLs outside anchor tokens",
                 ).model_dump_json()
                 + "\n"
             )

@@ -2,15 +2,19 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.session import get_db
 from schemas.chat_schema import ChatRequest, ChatResponse
+from schemas.sign_in_schema import SignInRequestSchema
 from schemas.sign_up_schema import CheckDuplicateIdRequestSchema, SignUpRequestSchema
 from services.chat_service import cat_agent
+from services.sign_in import sign_in, sign_in_with_token
 from services.sign_up import check_duplicate_id, sign_up
 
 router = APIRouter()
+security = HTTPBearer()
 
 
 @router.get("/")
@@ -41,3 +45,17 @@ async def check_duplicate_id_api(
     request: CheckDuplicateIdRequestSchema, db: Annotated[AsyncSession, Depends(get_db)]
 ):
     return await check_duplicate_id(request.id, db)
+
+
+@router.post("/sign-in")
+async def sign_in_api(request: SignInRequestSchema, db: Annotated[AsyncSession, Depends(get_db)]):
+    return await sign_in(request.id, request.password, db)
+
+
+@router.get("/sign-in/with-token")
+async def sign_in_with_token_api(
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    token = credentials.credentials
+    return await sign_in_with_token(token, db)
