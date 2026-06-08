@@ -74,5 +74,5 @@ async def sign_in_with_token_api(
 
 @router.get("/sign-out")
 async def sign_out_api(response: Response):
-    response.delete_cookie(key="access_token")
-    return Response(status_code=200)
+    response.delete_cookie(key="access_token", httponly=True)
+    return {"ok": True}
