@@ -21,7 +21,10 @@ async def sign_in(id: str, password: str, db: AsyncSession) -> SignInResponseSch
     return SignInResponseSchema(id=user.id, access_token=access_token)
 
 
-async def sign_in_with_token(token: str, db: AsyncSession) -> SignInWithTokenResponseSchema:
+async def sign_in_with_token(token: str | None, db: AsyncSession) -> SignInWithTokenResponseSchema:
+    if token is None:
+        raise HTTPException(status_code=401, detail="Token is required")
+
     user_id = decode_access_token(token)
     user = await db.execute(select(User).where(User.id == user_id))
     user = user.scalar()

@@ -1,10 +1,11 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Cookie, Depends, Response
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config import settings
 from db.session import get_db
 from schemas.chat_schema import ChatRequest, ChatResponse
 from schemas.sign_in_schema import SignInRequestSchema
@@ -14,7 +15,7 @@ from services.sign_in import sign_in, sign_in_with_token
 from services.sign_up import check_duplicate_id, sign_up
 
 router = APIRouter()
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 
 @router.get("/")
@@ -48,14 +49,24 @@ async def check_duplicate_id_api(
 
 
 @router.post("/sign-in")
-async def sign_in_api(request: SignInRequestSchema, db: Annotated[AsyncSession, Depends(get_db)]):
-    return await sign_in(request.id, request.password, db)
+async def sign_in_api(
+    request: SignInRequestSchema, response: Response, db: Annotated[AsyncSession, Depends(get_db)]
+):
+    response_data = await sign_in(request.id, request.password, db)
+    response.set_cookie(
+        key="access_token",
+        value=response_data.access_token,
+        httponly=True,
+        max_age=settings.access_token_expire_minutes * 60,
+    )
+    return response_data
 
 
 @router.get("/sign-in/with-token")
 async def sign_in_with_token_api(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)] = None,
+    cookie_token: Annotated[str | None, Cookie(key="access_token")] = None,
 ):
-    token = credentials.credentials
+    token = credentials.credentials if credentials else cookie_token
     return await sign_in_with_token(token, db)
