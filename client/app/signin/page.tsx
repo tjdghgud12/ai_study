@@ -6,12 +6,16 @@ import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import * as z from "zod";
 
+import { signIn } from "@/app/api/signIn";
 import ApiStatusIcon from "@/app/signin/ApiStatusIcon";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+
+import { useUserInfo } from "@/store/useUserInfo";
 
 const formSchema = z.object({
   id: z.string(),
@@ -21,6 +25,7 @@ const formSchema = z.object({
 const Signin = () => {
   const router = useRouter();
   const [seePassword, setSeePassword] = useState(false);
+  const setUserInfo = useUserInfo((state) => state.setUserInfo);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: standardSchemaResolver(formSchema),
@@ -31,22 +36,15 @@ const Signin = () => {
   });
 
   const onSubmit = (data: z.infer<typeof formSchema>) => {
-    console.log(data);
-    router.push("/chat");
-    // toast("You submitted the following values:", {
-    //   description: (
-    //     <pre className="mt-2 w-[320px] overflow-x-auto rounded-md bg-code p-4 text-code-foreground">
-    //       <code>{JSON.stringify(data, null, 2)}</code>
-    //     </pre>
-    //   ),
-    //   position: "bottom-right",
-    //   classNames: {
-    //     content: "flex flex-col gap-2",
-    //   },
-    //   style: {
-    //     "--border-radius": "calc(var(--radius)  + 4px)",
-    //   } as React.CSSProperties,
-    // });
+    toast.promise(signIn(data.id, data.password), {
+      loading: "사용자 정보 확인 중...",
+      success: (res) => {
+        setUserInfo({ id: res.id });
+        router.push("/chat");
+        return "로그인을 완료하였습니다.";
+      },
+      error: (err) => err.message,
+    });
   };
 
   return (
