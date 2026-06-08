@@ -66,7 +66,13 @@ async def sign_in_api(
 async def sign_in_with_token_api(
     db: Annotated[AsyncSession, Depends(get_db)],
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)] = None,
-    cookie_token: Annotated[str | None, Cookie(key="access_token")] = None,
+    cookie_token: Annotated[str | None, Cookie(alias="access_token")] = None,
 ):
     token = credentials.credentials if credentials else cookie_token
     return await sign_in_with_token(token, db)
+
+
+@router.get("/sign-out")
+async def sign_out_api(response: Response):
+    response.delete_cookie(key="access_token")
+    return Response(status_code=200)
