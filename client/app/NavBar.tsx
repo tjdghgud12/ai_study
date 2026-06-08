@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { useUserInfo } from "@/store/useUserInfo";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useLayoutEffect } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 const links = [
@@ -18,6 +18,7 @@ const links = [
 
 const NavBar = () => {
   const { userInfo, setUserInfo } = useUserInfo();
+  const [isLoading, setIsLoading] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -33,10 +34,19 @@ const NavBar = () => {
     });
   };
 
-  useLayoutEffect(() => {
-    signInWithToken().then((res) => {
-      setUserInfo({ id: res.id });
-    });
+  useEffect(() => {
+    signInWithToken()
+      .then((res) => {
+        setIsLoading(false);
+        setUserInfo({ id: res.id });
+      })
+      .catch(() => {
+        setIsLoading(false);
+        setUserInfo(null);
+      });
+    return () => {
+      setIsLoading(true);
+    };
   }, []);
 
   return (
@@ -47,7 +57,9 @@ const NavBar = () => {
         </Link>
       </div>
       <div className="w-fit flex divide-x divide-gray-400">
-        {userInfo ? (
+        {isLoading ? (
+          <></>
+        ) : userInfo ? (
           <>
             <Label className="w-fit px-2 hover:text-primary hover:scale-105 transition-all duration-300">{userInfo?.id}</Label>
             <Button className={cn("w-fit h-auto px-2 hover:bg-transparent", pathname === "/" ? "text-primary" : "text-gray-500")} variant="ghost" onClick={handleSignOut}>
