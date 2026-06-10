@@ -10,7 +10,7 @@ from db.session import get_db
 from schemas.chat_schema import ChatRequest, ChatResponse
 from schemas.sign_in_schema import SignInRequestSchema
 from schemas.sign_up_schema import CheckDuplicateIdRequestSchema, SignUpRequestSchema
-from services.chat_service import cat_agent
+from services.chat_service import cat_agent, get_sessions
 from services.sign_in import sign_in, sign_in_with_token
 from services.sign_up import check_duplicate_id, sign_up
 
@@ -29,11 +29,26 @@ async def chat_with_agent(request: ChatRequest):
 
 
 @router.post("/chat/stream")
-async def chat_stream(request: ChatRequest):
+async def chat_stream(request: ChatRequest, db: Annotated[AsyncSession, Depends(get_db)]):
     return StreamingResponse(
-        cat_agent.ask_question_stream(request.message, request.session_id),
+        cat_agent.ask_question_stream(
+            user_input=request.message,
+            db=db,
+            user_id=request.user_id,
+            session_id=request.session_id,
+        ),
         media_type="application/x-ndjson",
     )
+
+
+@router.get("/chat/sessions")
+async def get_sessions_api(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)] = None,
+    cookie_token: Annotated[str | None, Cookie(alias="access_token")] = None,
+):
+    token = credentials.credentials if credentials else cookie_token
+    return await get_sessions(token=token, db=db)
 
 
 @router.post("/sign-up")

@@ -8,10 +8,21 @@ from fastapi import HTTPException
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, ToolMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
+from sqlalchemy import func, insert, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from lib.mcp_tools import McpTools
-from schemas.chat_schema import ChatResponse, ChatStreamDelta, ChatStreamDone, ChatStreamError
+from lib.security import decode_access_token
+from models.messages_model import Messages
+from models.sessions_model import Sessions
+from schemas.chat_schema import (
+    ChatResponse,
+    ChatStreamDelta,
+    ChatStreamDone,
+    ChatStreamError,
+    SessionResponse,
+)
 from schemas.llm_response_schema import LlmResponse, RouterResponse
 
 
@@ -176,11 +187,47 @@ class CatAgentService:
         )
 
     async def ask_question_stream(
-        self, user_input: str, session_id: str | None = None
+        self,
+        user_input: str,
+        db: AsyncSession,
+        user_id: str | None = None,
+        session_id: str | None = None,
     ) -> AsyncIterator[str]:
         if session_id is None:
             session_id = self.create_session_id()
+            await db.execute(
+                insert(Sessions).values(
+                    user_id=user_id,
+                    id=session_id,
+                    title=user_input[:50],
+                )
+            )
+
         message_id = self.create_message_id()
+        session_update = await db.execute(
+            update(Sessions)
+            .where(
+                Sessions.id == session_id,
+                Sessions.user_id == user_id,
+            )
+            .values(
+                next_sequence=func.coalesce(Sessions.next_sequence, 0) + 2,
+                updated_at=func.now(),
+            )
+            .returning(Sessions)
+        )
+        session_update = session_update.scalar_one()
+
+        await db.execute(
+            insert(Messages).values(
+                user_id=user_id,
+                session_id=session_id,
+                turn_id=message_id,
+                role="user",
+                sequence=session_update.next_sequence - 2,
+                message=user_input,
+            )
+        )
 
         need_search = await self._router_agent.ainvoke(
             {"messages": [{"role": "user", "content": user_input}]}
@@ -209,8 +256,8 @@ class CatAgentService:
                 delta_event = ChatStreamDelta(message_id=message_id, chat_reply=delta)
                 yield (delta_event.model_dump_json() + "\n")
             elif mode == "updates":
-                for update in chunk.values():
-                    if msgs := update.get("messages"):
+                for update_item in chunk.values():
+                    if msgs := update_item.get("messages"):
                         all_messages = msgs
 
         if not chat_reply:
@@ -237,6 +284,17 @@ class CatAgentService:
 
         final = self._parse_llm_messages(chat_reply, all_messages)
         final.session_id = session_id
+
+        await db.execute(
+            insert(Messages).values(
+                user_id=user_id,
+                session_id=session_id,
+                turn_id=message_id,
+                role="ai",
+                sequence=session_update.next_sequence - 1,
+                message=chat_reply,
+            )
+        )
         yield ChatStreamDone(message_id=message_id, **final.model_dump()).model_dump_json() + "\n"
 
     def create_session_id(self) -> str:
@@ -341,6 +399,13 @@ class CatAgentService:
                 if isinstance(block, dict) and block.get("type") == "text"
             )
         return str(content) if content else ""
+
+
+async def get_sessions(db: AsyncSession, token: str) -> list[SessionResponse]:
+    user_id = decode_access_token(token)
+    sessions = await db.execute(select(Sessions).where(Sessions.user_id == user_id))
+    sessions = sessions.scalars().all()
+    return sessions
 
 
 cat_agent = CatAgentService()

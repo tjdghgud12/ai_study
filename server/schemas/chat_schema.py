@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 
 from pydantic import Field
@@ -8,6 +9,7 @@ from schemas.base_schema import BaseSchema
 
 class ChatRequest(BaseSchema):
     message: str
+    user_id: str | None = None
     session_id: str | None = None
 
 
@@ -33,3 +35,10 @@ class ChatStreamError(BaseSchema):
     type: Literal["error"] = "error"
     message_id: str
     detail: str
+
+
+class SessionResponse(BaseSchema):
+    session_id: str
+    title: str | None = None
+    created_at: datetime
+    updated_at: datetime
