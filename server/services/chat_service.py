@@ -296,8 +296,6 @@ class CatAgentService:
             )
         )
 
-        test = 1
-
         yield (
             ChatStreamDone(
                 **final.model_dump(),
