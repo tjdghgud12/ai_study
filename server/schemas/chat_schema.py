@@ -29,6 +29,10 @@ class ChatStreamDelta(BaseSchema):
 class ChatStreamDone(ChatResponse):
     type: Literal["done"] = "done"
     message_id: str
+    # session 관련 추가 정보
+    title: str | None = None
+    created_at: datetime
+    updated_at: datetime
 
 
 class ChatStreamError(BaseSchema):

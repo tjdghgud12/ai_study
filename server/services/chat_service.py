@@ -283,19 +283,31 @@ class CatAgentService:
             return
 
         final = self._parse_llm_messages(chat_reply, all_messages)
-        final.session_id = session_id
+        final.session_id = session_update.id
 
         await db.execute(
             insert(Messages).values(
                 user_id=user_id,
-                session_id=session_id,
+                session_id=session_update.id,
                 turn_id=message_id,
                 role="ai",
                 sequence=session_update.next_sequence - 1,
                 message=chat_reply,
             )
         )
-        yield ChatStreamDone(message_id=message_id, **final.model_dump()).model_dump_json() + "\n"
+
+        test = 1
+
+        yield (
+            ChatStreamDone(
+                **final.model_dump(),
+                message_id=message_id,
+                title=session_update.title,
+                created_at=session_update.created_at,
+                updated_at=session_update.updated_at,
+            ).model_dump_json()
+            + "\n"
+        )
 
     def create_session_id(self) -> str:
         return str(uuid.uuid4())
