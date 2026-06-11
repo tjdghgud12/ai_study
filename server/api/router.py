@@ -10,7 +10,7 @@ from db.session import get_db
 from schemas.chat_schema import ChatRequest, ChatResponse
 from schemas.sign_in_schema import SignInRequestSchema
 from schemas.sign_up_schema import CheckDuplicateIdRequestSchema, SignUpRequestSchema
-from services.chat_service import cat_agent, get_sessions
+from services.chat_service import cat_agent, get_chat_history, get_sessions
 from services.sign_in import sign_in, sign_in_with_token
 from services.sign_up import check_duplicate_id, sign_up
 
@@ -49,6 +49,17 @@ async def get_sessions_api(
 ):
     token = credentials.credentials if credentials else cookie_token
     return await get_sessions(token=token, db=db)
+
+
+@router.get("/chat/history/messages")
+async def get_session_api(
+    session_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)] = None,
+    cookie_token: Annotated[str | None, Cookie(alias="access_token")] = None,
+):
+    token = credentials.credentials if credentials else cookie_token
+    return await get_chat_history(session_id=session_id, token=token, db=db)
 
 
 @router.post("/sign-up")

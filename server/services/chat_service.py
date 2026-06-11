@@ -21,6 +21,8 @@ from schemas.chat_schema import (
     ChatStreamDelta,
     ChatStreamDone,
     ChatStreamError,
+    ChatStreamNewSession,
+    MessageResponse,
     SessionResponse,
 )
 from schemas.llm_response_schema import LlmResponse, RouterResponse
@@ -193,17 +195,34 @@ class CatAgentService:
         user_id: str | None = None,
         session_id: str | None = None,
     ) -> AsyncIterator[str]:
+        message_id = self.create_message_id()
+
         if session_id is None:
             session_id = self.create_session_id()
-            await db.execute(
-                insert(Sessions).values(
+            new_session = await db.execute(
+                insert(Sessions)
+                .values(
                     user_id=user_id,
                     id=session_id,
                     title=user_input[:50],
                 )
+                .returning(Sessions)
+            )
+            new_session = new_session.scalar_one()
+
+            await db.commit()
+
+            yield (
+                ChatStreamNewSession(
+                    message_id=message_id,
+                    session_id=new_session.id,
+                    session_title=new_session.title,
+                    created_at=new_session.created_at,
+                    updated_at=new_session.updated_at,
+                ).model_dump_json(by_alias=True)
+                + "\n"
             )
 
-        message_id = self.create_message_id()
         session_update = await db.execute(
             update(Sessions)
             .where(
@@ -254,7 +273,7 @@ class CatAgentService:
                     continue
                 chat_reply += delta
                 delta_event = ChatStreamDelta(message_id=message_id, chat_reply=delta)
-                yield (delta_event.model_dump_json() + "\n")
+                yield (delta_event.model_dump_json(by_alias=True) + "\n")
             elif mode == "updates":
                 for update_item in chunk.values():
                     if msgs := update_item.get("messages"):
@@ -267,7 +286,7 @@ class CatAgentService:
             yield (
                 ChatStreamError(
                     message_id=message_id, detail="Upstream model returned an empty response"
-                ).model_dump_json()
+                ).model_dump_json(by_alias=True)
                 + "\n"
             )
             return
@@ -277,7 +296,7 @@ class CatAgentService:
                 ChatStreamError(
                     message_id=message_id,
                     detail="Response contained bare URLs outside anchor tokens",
-                ).model_dump_json()
+                ).model_dump_json(by_alias=True)
                 + "\n"
             )
             return
@@ -303,7 +322,7 @@ class CatAgentService:
                 title=session_update.title,
                 created_at=session_update.created_at,
                 updated_at=session_update.updated_at,
-            ).model_dump_json()
+            ).model_dump_json(by_alias=True)
             + "\n"
         )
 
@@ -413,9 +432,41 @@ class CatAgentService:
 
 async def get_sessions(db: AsyncSession, token: str) -> list[SessionResponse]:
     user_id = decode_access_token(token)
-    sessions = await db.execute(select(Sessions).where(Sessions.user_id == user_id))
+    sessions = await db.execute(
+        select(Sessions).where(Sessions.user_id == user_id).order_by(Sessions.created_at.desc())
+    )
     sessions = sessions.scalars().all()
-    return sessions
+    return [
+        SessionResponse(
+            session_id=session.id,
+            title=session.title,
+            created_at=session.created_at,
+            updated_at=session.updated_at,
+        )
+        for session in sessions
+    ]
+
+
+async def get_chat_history(session_id: str, db: AsyncSession, token: str) -> list[MessageResponse]:
+    user_id = decode_access_token(token)
+    messages = await db.execute(
+        select(Messages)
+        .where(Messages.session_id == session_id, Messages.user_id == user_id)
+        .order_by(Messages.sequence.asc())
+    )
+    messages = messages.scalars().all()
+    return [
+        MessageResponse(
+            message_id=message.turn_id,
+            session_id=message.session_id,
+            turn_id=message.turn_id,
+            role=str(message.role),
+            sequence=message.sequence,
+            message=message.message,
+            created_at=message.created_at,
+        )
+        for message in messages
+    ]
 
 
 cat_agent = CatAgentService()

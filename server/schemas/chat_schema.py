@@ -20,6 +20,15 @@ class ChatResponse(BaseSchema):
     tool_data: dict[str, Any] = Field(default_factory=dict)
 
 
+class ChatStreamNewSession(BaseSchema):
+    type: Literal["new_session"] = "newSession"
+    message_id: str
+    session_id: str
+    session_title: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
 class ChatStreamDelta(BaseSchema):
     type: Literal["delta"] = "delta"
     message_id: str
@@ -46,3 +55,13 @@ class SessionResponse(BaseSchema):
     title: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class MessageResponse(BaseSchema):
+    message_id: str
+    session_id: str
+    turn_id: str
+    role: str
+    sequence: int
+    message: str
+    created_at: datetime
