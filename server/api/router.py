@@ -52,7 +52,7 @@ async def get_sessions_api(
 
 
 @router.get("/chat/history/messages")
-async def get_session_api(
+async def get_chat_history_api(
     session_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)] = None,
