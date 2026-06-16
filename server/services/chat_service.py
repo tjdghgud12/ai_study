@@ -447,7 +447,7 @@ async def get_sessions(db: AsyncSession, token: str) -> list[SessionResponse]:
     ]
 
 
-async def get_chat_history(session_id: str, db: AsyncSession, token: str) -> list[MessageResponse]:
+async def get_chat_messages(session_id: str, db: AsyncSession, token: str) -> list[MessageResponse]:
     user_id = decode_access_token(token)
     messages = await db.execute(
         select(Messages)

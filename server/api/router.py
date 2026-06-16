@@ -7,10 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from db.session import get_db
+from lib.security import decode_access_token
 from schemas.chat_schema import ChatRequest, ChatResponse
 from schemas.sign_in_schema import SignInRequestSchema
 from schemas.sign_up_schema import CheckDuplicateIdRequestSchema, SignUpRequestSchema
-from services.chat_service import cat_agent, get_chat_history, get_sessions
+from services.chat_service import cat_agent, get_chat_messages, get_sessions
 from services.sign_in import sign_in, sign_in_with_token
 from services.sign_up import check_duplicate_id, sign_up
 
@@ -29,12 +30,19 @@ async def chat_with_agent(request: ChatRequest):
 
 
 @router.post("/chat/stream")
-async def chat_stream(request: ChatRequest, db: Annotated[AsyncSession, Depends(get_db)]):
+async def chat_stream(
+    request: ChatRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)] = None,
+    cookie_token: Annotated[str | None, Cookie(alias="access_token")] = None,
+):
+    token = credentials.credentials if credentials else cookie_token
+    user_id = decode_access_token(token)
     return StreamingResponse(
         cat_agent.ask_question_stream(
             user_input=request.message,
             db=db,
-            user_id=request.user_id,
+            user_id=request.user_id or user_id,
             session_id=request.session_id,
         ),
         media_type="application/x-ndjson",
@@ -51,15 +59,15 @@ async def get_sessions_api(
     return await get_sessions(token=token, db=db)
 
 
-@router.get("/chat/history/messages")
-async def get_chat_history_api(
+@router.get("/chat/messages")
+async def get_chat_messages_api(
     session_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)] = None,
     cookie_token: Annotated[str | None, Cookie(alias="access_token")] = None,
 ):
     token = credentials.credentials if credentials else cookie_token
-    return await get_chat_history(session_id=session_id, token=token, db=db)
+    return await get_chat_messages(session_id=session_id, token=token, db=db)
 
 
 @router.post("/sign-up")
