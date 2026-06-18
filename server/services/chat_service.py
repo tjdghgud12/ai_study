@@ -199,43 +199,54 @@ class CatAgentService:
 
         if session_id is None:
             session_id = self.create_session_id()
-            new_session = await db.execute(
-                insert(Sessions)
-                .values(
-                    user_id=user_id,
-                    id=session_id,
-                    title=user_input[:50],
+            session_update = (
+                await db.execute(
+                    insert(Sessions)
+                    .values(
+                        user_id=user_id,
+                        id=session_id,
+                        title=user_input[:50],
+                        next_sequence=2,
+                    )
+                    .returning(Sessions)
                 )
-                .returning(Sessions)
-            )
-            new_session = new_session.scalar_one()
-
-            await db.commit()
+            ).scalars().one()
 
             yield (
                 ChatStreamNewSession(
                     message_id=message_id,
-                    session_id=new_session.id,
-                    session_title=new_session.title,
-                    created_at=new_session.created_at,
-                    updated_at=new_session.updated_at,
+                    session_id=session_update.id,
+                    session_title=session_update.title,
+                    created_at=session_update.created_at,
+                    updated_at=session_update.updated_at,
                 ).model_dump_json(by_alias=True)
                 + "\n"
             )
+        else:
+            session_update = (
+                await db.execute(
+                    update(Sessions)
+                    .where(
+                        Sessions.id == session_id,
+                        Sessions.user_id == user_id,
+                    )
+                    .values(
+                        next_sequence=func.coalesce(Sessions.next_sequence, 0) + 2,
+                        updated_at=func.now(),
+                    )
+                    .returning(Sessions)
+                )
+            ).scalars().one_or_none()
 
-        session_update = await db.execute(
-            update(Sessions)
-            .where(
-                Sessions.id == session_id,
-                Sessions.user_id == user_id,
+        if session_update is None:
+            yield (
+                ChatStreamError(
+                    message_id=message_id,
+                    detail="Session not found",
+                ).model_dump_json(by_alias=True)
+                + "\n"
             )
-            .values(
-                next_sequence=func.coalesce(Sessions.next_sequence, 0) + 2,
-                updated_at=func.now(),
-            )
-            .returning(Sessions)
-        )
-        session_update = session_update.scalar_one()
+            return
 
         await db.execute(
             insert(Messages).values(
