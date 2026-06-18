@@ -1,10 +1,11 @@
 "use client";
 
 import { CatIcon, SleepCatIcon } from "@/app/CatIcon";
-const ApiStatusIcon = ({ live }: { live: boolean }) => {
+import { cn } from "@/lib/utils";
+const ApiStatusIcon = ({ live, className }: { live: boolean; className?: string }) => {
   return (
-    <div className="w-full h-[37.5vh] flex items-center justify-center">
-      {live ? <CatIcon className="w-[30vh] h-[30vh] mt-auto" /> : <SleepCatIcon className="w-[30vh] h-[37.5vh]" />}
+    <div className={cn("w-full h-[37.5vh] flex items-center justify-center", className)}>
+      {live ? <CatIcon className="w-full h-full aspect-square mt-auto" /> : <SleepCatIcon className="w-full h-full aspect-square" />}
     </div>
   );
 };

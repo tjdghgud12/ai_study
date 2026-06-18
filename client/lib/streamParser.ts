@@ -1,14 +1,22 @@
 export interface StreamChunk {
-  type: "text" | "urls" | "done" | "error";
+  type: "text" | "urls" | "done" | "error" | "newSession";
   message: string;
   messageId: string;
+  sessionId?: string;
+  sessionTitle?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface ServerStreamPayload {
   type?: string;
-  chat_reply?: string;
-  message_id?: string;
+  chatReply?: string;
+  messageId?: string;
   detail?: string;
+  sessionId?: string;
+  sessionTitle?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 function parseLineContent(content: string): StreamChunk {
@@ -17,21 +25,32 @@ function parseLineContent(content: string): StreamChunk {
 
   try {
     const parsed = JSON.parse(content) as ServerStreamPayload;
+    if (parsed.type === "newSession") {
+      return {
+        type: "newSession",
+        message: parsed.chatReply ?? "",
+        messageId: parsed.messageId ?? "",
+        sessionId: parsed.sessionId ?? "",
+        sessionTitle: parsed.sessionTitle ?? null,
+        createdAt: parsed.createdAt ?? "",
+        updatedAt: parsed.updatedAt ?? "",
+      };
+    }
     if (parsed.type === "delta") {
       return {
         type: "text",
-        message: parsed.chat_reply ?? "",
-        messageId: parsed.message_id ?? "",
+        message: parsed.chatReply ?? "",
+        messageId: parsed.messageId ?? "",
       };
     }
     if (parsed.type === "done") {
-      return { type: "done", message: parsed.chat_reply ?? "", messageId: parsed.message_id ?? "" };
+      return { type: "done", message: parsed.chatReply ?? "", messageId: parsed.messageId ?? "" };
     }
     if (parsed.type === "error") {
       return {
         type: "error",
         message: parsed.detail ?? "스트림 오류",
-        messageId: parsed.message_id ?? "",
+        messageId: parsed.messageId ?? "",
       };
     }
   } catch {

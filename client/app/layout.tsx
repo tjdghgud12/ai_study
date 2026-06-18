@@ -26,12 +26,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-screen antialiased`}>
-      <body className="h-full flex flex-col min-h-0">
+    <html lang="kr" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+      <body className="h-full flex flex-col min-h-0 overflow-hidden">
         <Toaster />
         <NavBar />
-        <QueryProviders>{children}</QueryProviders>
-        <div>Footer</div>
+        <div className="flex min-h-0 flex-1 flex-col">
+          <QueryProviders>{children}</QueryProviders>
+        </div>
+        <div className="shrink-0">Footer</div>
       </body>
     </html>
   );

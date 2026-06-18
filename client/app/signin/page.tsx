@@ -7,7 +7,6 @@ import { Controller, useForm } from "react-hook-form";
 import * as z from "zod";
 
 import { signIn } from "@/app/api/signIn";
-import ApiStatusIcon from "@/app/signin/ApiStatusIcon";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -49,8 +48,6 @@ const Signin = () => {
 
   return (
     <div className="w-full max-w-sm m-auto flex flex-col gap-4">
-      <ApiStatusIcon live={false} />
-
       <form id="form-rhf-demo" onSubmit={form.handleSubmit(onSubmit)}>
         <FieldGroup>
           <Controller
