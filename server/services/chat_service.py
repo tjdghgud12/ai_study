@@ -200,17 +200,23 @@ class CatAgentService:
         if session_id is None:
             session_id = self.create_session_id()
             session_update = (
-                await db.execute(
-                    insert(Sessions)
-                    .values(
-                        user_id=user_id,
-                        id=session_id,
-                        title=user_input[:50],
-                        next_sequence=2,
+                (
+                    await db.execute(
+                        insert(Sessions)
+                        .values(
+                            user_id=user_id,
+                            id=session_id,
+                            title=user_input[:50],
+                            next_sequence=2,
+                        )
+                        .returning(Sessions)
                     )
-                    .returning(Sessions)
                 )
-            ).scalars().one()
+                .scalars()
+                .one()
+            )
+
+            await db.commit()
 
             yield (
                 ChatStreamNewSession(
@@ -224,19 +230,23 @@ class CatAgentService:
             )
         else:
             session_update = (
-                await db.execute(
-                    update(Sessions)
-                    .where(
-                        Sessions.id == session_id,
-                        Sessions.user_id == user_id,
+                (
+                    await db.execute(
+                        update(Sessions)
+                        .where(
+                            Sessions.id == session_id,
+                            Sessions.user_id == user_id,
+                        )
+                        .values(
+                            next_sequence=func.coalesce(Sessions.next_sequence, 0) + 2,
+                            updated_at=func.now(),
+                        )
+                        .returning(Sessions)
                     )
-                    .values(
-                        next_sequence=func.coalesce(Sessions.next_sequence, 0) + 2,
-                        updated_at=func.now(),
-                    )
-                    .returning(Sessions)
                 )
-            ).scalars().one_or_none()
+                .scalars()
+                .one_or_none()
+            )
 
         if session_update is None:
             yield (
