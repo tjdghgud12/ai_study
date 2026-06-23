@@ -8,7 +8,7 @@ interface IMessage {
   role: "user" | "ai";
 }
 
-const useSendChat = ({ setSession, chatHistoryRefetch }: { setSession: () => void; chatHistoryRefetch?: () => Promise<unknown> }) => {
+const useSendChat = ({ setSessionId, chatHistoryRefetch }: { setSessionId: (sessionId: string) => void; chatHistoryRefetch?: () => Promise<unknown> }) => {
   const [responseMessage, setResponseMessage] = useState<IMessage | null>(null);
   const [requestMessage, setRequestMessage] = useState<IMessage | null>(null);
   const [isFirstChunk, setIsFirstChunk] = useState<boolean>(false);
@@ -31,7 +31,7 @@ const useSendChat = ({ setSession, chatHistoryRefetch }: { setSession: () => voi
 
       for await (const chunk of parseStream(response)) {
         if (chunk.type === "newSession") {
-          setSession();
+          setSessionId(chunk.sessionId ?? "");
         } else if (chunk.type === "text") {
           if (firstChunkCheck) {
             setIsFirstChunk(false);
