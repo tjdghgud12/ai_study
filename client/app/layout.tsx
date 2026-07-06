@@ -1,3 +1,4 @@
+import AuthProvider from "@/app/AuthProvider";
 import NavBar from "@/app/NavBar";
 import QueryProviders from "@/app/QueryProviders";
 import { Toaster } from "@/components/ui/sonner";
@@ -29,10 +30,12 @@ export default function RootLayout({
     <html lang="kr" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="h-full flex flex-col min-h-0 overflow-hidden">
         <Toaster />
-        <NavBar />
-        <div className="flex min-h-0 flex-1 flex-col">
-          <QueryProviders>{children}</QueryProviders>
-        </div>
+        <QueryProviders>
+          <AuthProvider>
+            <NavBar />
+            <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+          </AuthProvider>
+        </QueryProviders>
         <div className="shrink-0">Footer</div>
       </body>
     </html>

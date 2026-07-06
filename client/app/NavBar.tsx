@@ -1,6 +1,6 @@
 "use client";
 
-import { signInWithToken, signOut } from "@/app/api/signIn";
+import { signOut } from "@/app/api/signIn";
 import { CatIcon } from "@/app/CatIcon";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -8,7 +8,6 @@ import { cn } from "@/lib/utils";
 import { useUserInfo } from "@/store/useUserInfo";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 const links = [
@@ -18,7 +17,6 @@ const links = [
 
 const NavBar = () => {
   const { userInfo, setUserInfo } = useUserInfo();
-  const [isLoading, setIsLoading] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -34,21 +32,6 @@ const NavBar = () => {
     });
   };
 
-  useEffect(() => {
-    signInWithToken()
-      .then((res) => {
-        setIsLoading(false);
-        setUserInfo({ id: res.id });
-      })
-      .catch(() => {
-        setIsLoading(false);
-        setUserInfo(null);
-      });
-    return () => {
-      setIsLoading(true);
-    };
-  }, []);
-
   return (
     <div className="h-16 flex justify-between items-center">
       <div className="h-full flex items-center shrink-0">
@@ -57,9 +40,7 @@ const NavBar = () => {
         </Link>
       </div>
       <div className="w-fit flex divide-x divide-gray-400">
-        {isLoading ? (
-          <></>
-        ) : userInfo ? (
+        {userInfo ? (
           <>
             <Label className="w-fit px-2 hover:text-primary hover:scale-105 transition-all duration-300">{userInfo?.id}</Label>
             <Button className={cn("w-fit h-auto px-2 hover:bg-transparent", pathname === "/" ? "text-primary" : "text-gray-500")} variant="ghost" onClick={handleSignOut}>
