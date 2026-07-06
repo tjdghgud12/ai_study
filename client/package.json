@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack -p 9500",
+    "dev": "next dev -p 9500",
+    "dev:webpack": "next dev --webpack -p 9500",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

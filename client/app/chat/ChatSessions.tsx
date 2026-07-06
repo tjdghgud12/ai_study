@@ -1,11 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useGetSessions } from "@/hooks/useSession";
+import { isHttpError } from "@/lib/httpError";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 const ChatSessions = ({ selectedSessionId, setSelectedSessionId }: { selectedSessionId: string; setSelectedSessionId: (sessionId: string) => void }) => {
-  const { data: sessions, isPending, refetch } = useGetSessions();
+  const { data: sessions, isPending, refetch, error } = useGetSessions();
+  const router = useRouter();
   const [sessionId, setSessionId] = useState<string>(selectedSessionId);
 
   if (selectedSessionId !== sessionId) {
@@ -16,6 +19,10 @@ const ChatSessions = ({ selectedSessionId, setSelectedSessionId }: { selectedSes
     setSessionId(sessionId);
     setSelectedSessionId(sessionId);
   };
+
+  useEffect(() => {
+    if (isHttpError(error) && error.status === 401) router.push("/signin");
+  }, [error, router]);
 
   return (
     <div className="flex h-full min-h-0 w-1/4 max-w-xs min-w-[200px] max-h-full flex-col items-start justify-start gap-2 overflow-y-auto rounded-3xl bg-gray-50 p-4">

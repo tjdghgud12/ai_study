@@ -1,3 +1,4 @@
+import apiFetch from "@/lib/apiFetch";
 import { parseStream } from "@/lib/streamParser";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
@@ -18,14 +19,10 @@ const useSendChat = ({ setSessionId, chatHistoryRefetch }: { setSessionId: (sess
       setIsFirstChunk(true);
       setResponseMessage(null);
       setRequestMessage({ message, role: "user" as const, messageId: "" });
-      const response = await fetch(`${process.env.NEXT_PUBLIC_CAT_AGENT_API}/api/chat/stream`, {
+      const response = await apiFetch(`${process.env.NEXT_PUBLIC_CAT_AGENT_API}/api/chat/stream`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ message: message, sessionId: sessionId === "new session" ? null : sessionId }),
       });
-
-      if (!response.ok) throw new Error(`서버 오류: ${response.status}`);
 
       let firstChunkCheck = true;
 
