@@ -9,16 +9,13 @@ from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, ToolMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from redis import Redis
-from sqlalchemy import func, insert, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from lib.mcp_tools import McpTools
 from lib.security import decode_access_token
-from models.messages_model import Messages
-from models.sessions_model import Sessions
-from repositories.messages_repository import get_messages_data
-from repositories.sessions_repository import get_sessions_data
+from repositories.messages_repository import create_messages, get_messages_data
+from repositories.sessions_repository import create_session, get_sessions_data, update_session
 from schemas.chat_schema import (
     ChatResponse,
     ChatStreamDelta,
@@ -195,6 +192,7 @@ class CatAgentService:
         self,
         user_input: str,
         db: AsyncSession,
+        redis: Redis,
         user_id: str | None = None,
         session_id: str | None = None,
     ) -> AsyncIterator[str]:
@@ -202,25 +200,7 @@ class CatAgentService:
 
         if session_id is None:
             session_id = self.create_session_id()
-            # Redis 추가 필요
-            session_update = (
-                (
-                    await db.execute(
-                        insert(Sessions)
-                        .values(
-                            user_id=user_id,
-                            id=session_id,
-                            title=user_input[:50],
-                            next_sequence=2,
-                        )
-                        .returning(Sessions)
-                    )
-                )
-                .scalars()
-                .one()
-            )
-
-            await db.commit()
+            session_update = await create_session(db, redis, user_id, session_id, user_input[:50])
 
             yield (
                 ChatStreamNewSession(
@@ -233,25 +213,7 @@ class CatAgentService:
                 + "\n"
             )
         else:
-            # Redis 추가 필요
-            session_update = (
-                (
-                    await db.execute(
-                        update(Sessions)
-                        .where(
-                            Sessions.id == session_id,
-                            Sessions.user_id == user_id,
-                        )
-                        .values(
-                            next_sequence=func.coalesce(Sessions.next_sequence, 0) + 2,
-                            updated_at=func.now(),
-                        )
-                        .returning(Sessions)
-                    )
-                )
-                .scalars()
-                .one_or_none()
-            )
+            session_update = await update_session(db, redis, user_id, session_id)
 
         if session_update is None:
             yield (
@@ -263,16 +225,15 @@ class CatAgentService:
             )
             return
 
-        # Redis 추가 필요
-        await db.execute(
-            insert(Messages).values(
-                user_id=user_id,
-                session_id=session_id,
-                turn_id=message_id,
-                role="user",
-                sequence=session_update.next_sequence - 2,
-                message=user_input,
-            )
+        await create_messages(
+            db=db,
+            redis=redis,
+            user_id=user_id,
+            session_id=session_id,
+            message_id=message_id,
+            message=user_input,
+            sequence=session_update.next_sequence - 2,
+            role="user",
         )
 
         need_search = await self._router_agent.ainvoke(
@@ -331,16 +292,15 @@ class CatAgentService:
         final = self._parse_llm_messages(chat_reply, all_messages)
         final.session_id = session_update.id
 
-        # Redis 추가 필요
-        await db.execute(
-            insert(Messages).values(
-                user_id=user_id,
-                session_id=session_update.id,
-                turn_id=message_id,
-                role="ai",
-                sequence=session_update.next_sequence - 1,
-                message=final.chat_reply,
-            )
+        await create_messages(
+            db=db,
+            redis=redis,
+            user_id=user_id,
+            session_id=session_id,
+            message_id=message_id,
+            message=final.chat_reply,
+            sequence=session_update.next_sequence - 1,
+            role="ai",
         )
 
         yield (

@@ -106,7 +106,8 @@ async def get_sessions_data(db: AsyncSession, redis: Redis, user_id: str) -> lis
             .all()
         )
         mapping = {s.id: session_to_json_string(s) for s in sessions}
-        await redis.hset(f"sessions:{user_id}", mapping=mapping)
+        if mapping:
+            await redis.hset(f"sessions:{user_id}", mapping=mapping)
 
         return sessions
     sessions = [_session_from_redis(raw) for raw in session_data.values()]

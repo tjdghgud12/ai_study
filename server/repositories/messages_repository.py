@@ -1,10 +1,11 @@
 import json
 
 from redis.asyncio import Redis
-from sqlalchemy import inspect, select
+from sqlalchemy import insert, inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.messages_model import Messages
+from models.sessions_model import Sessions
 
 
 def messages_to_json_string(messages: Messages) -> str:
@@ -17,30 +18,42 @@ def messages_to_json_string(messages: Messages) -> str:
     )
 
 
-# async def create_messages(
-#     db: AsyncSession, redis: Redis, user_id: str, session_id: str, title: str
-# ) -> Sessions:
-#     session = (
-#         (
-#             await db.execute(
-#                 insert(Sessions)
-#                 .values(
-#                     user_id=user_id,
-#                     id=session_id,
-#                     title=title,
-#                     next_sequence=2,
-#                 )
-#                 .returning(Sessions)
-#             )
-#         )
-#         .scalars()
-#         .one()
-#     )
-#     await db.commit()
+async def create_messages(
+    db: AsyncSession,
+    redis: Redis,
+    user_id: str,
+    session_id: str,
+    message_id: str,
+    message: str,
+    sequence: int,
+    role: str,
+) -> Sessions:
+    message = (
+        (
+            await db.execute(
+                insert(Messages)
+                .values(
+                    user_id=user_id,
+                    session_id=session_id,
+                    turn_id=message_id,
+                    role=role,
+                    sequence=sequence,
+                    message=message,
+                )
+                .returning(Messages)
+            )
+        )
+        .scalars()
+        .one()
+    )
 
-#     await redis.hset(f"sessions:{user_id}", session.id, session_to_json_string(session))
+    await db.commit()
 
-#     return session
+    await redis.hset(
+        f"messages:{user_id}-{session_id}", f"{message_id}-{role}", messages_to_json_string(message)
+    )
+
+    return message
 
 
 # async def update_session(

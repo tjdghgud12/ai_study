@@ -45,6 +45,7 @@ async def chat_stream(
         cat_agent.ask_question_stream(
             user_input=request.message,
             db=db,
+            redis=redis,
             user_id=request.user_id or user_id,
             session_id=request.session_id,
         ),
