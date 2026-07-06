@@ -8,7 +8,8 @@ from fastapi import HTTPException
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, ToolMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
-from sqlalchemy import func, insert, select, update
+from redis import Redis
+from sqlalchemy import func, insert, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
@@ -16,6 +17,8 @@ from lib.mcp_tools import McpTools
 from lib.security import decode_access_token
 from models.messages_model import Messages
 from models.sessions_model import Sessions
+from repositories.messages_repository import get_messages_data
+from repositories.sessions_repository import get_sessions_data
 from schemas.chat_schema import (
     ChatResponse,
     ChatStreamDelta,
@@ -199,6 +202,7 @@ class CatAgentService:
 
         if session_id is None:
             session_id = self.create_session_id()
+            # Redis 추가 필요
             session_update = (
                 (
                     await db.execute(
@@ -229,6 +233,7 @@ class CatAgentService:
                 + "\n"
             )
         else:
+            # Redis 추가 필요
             session_update = (
                 (
                     await db.execute(
@@ -258,6 +263,7 @@ class CatAgentService:
             )
             return
 
+        # Redis 추가 필요
         await db.execute(
             insert(Messages).values(
                 user_id=user_id,
@@ -325,6 +331,7 @@ class CatAgentService:
         final = self._parse_llm_messages(chat_reply, all_messages)
         final.session_id = session_update.id
 
+        # Redis 추가 필요
         await db.execute(
             insert(Messages).values(
                 user_id=user_id,
@@ -332,7 +339,7 @@ class CatAgentService:
                 turn_id=message_id,
                 role="ai",
                 sequence=session_update.next_sequence - 1,
-                message=chat_reply,
+                message=final.chat_reply,
             )
         )
 
@@ -451,12 +458,10 @@ class CatAgentService:
         return str(content) if content else ""
 
 
-async def get_sessions(db: AsyncSession, token: str) -> list[SessionResponse]:
+async def get_sessions(db: AsyncSession, redis: Redis, token: str) -> list[SessionResponse]:
     user_id = decode_access_token(token)
-    sessions = await db.execute(
-        select(Sessions).where(Sessions.user_id == user_id).order_by(Sessions.created_at.desc())
-    )
-    sessions = sessions.scalars().all()
+    sessions = await get_sessions_data(db, redis, user_id)
+
     return [
         SessionResponse(
             session_id=session.id,
@@ -468,14 +473,11 @@ async def get_sessions(db: AsyncSession, token: str) -> list[SessionResponse]:
     ]
 
 
-async def get_chat_messages(session_id: str, db: AsyncSession, token: str) -> list[MessageResponse]:
+async def get_chat_messages(
+    session_id: str, db: AsyncSession, redis: Redis, token: str
+) -> list[MessageResponse]:
     user_id = decode_access_token(token)
-    messages = await db.execute(
-        select(Messages)
-        .where(Messages.session_id == session_id, Messages.user_id == user_id)
-        .order_by(Messages.sequence.asc())
-    )
-    messages = messages.scalars().all()
+    messages = await get_messages_data(db, redis, user_id, session_id)
     return [
         MessageResponse(
             message_id=message.turn_id,

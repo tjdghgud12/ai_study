@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     secret_key: str
     access_token_expire_minutes: int = 1440  # default to 24 hours
 
+    redis_url: str
+
     project_name: str = "Cat AI Agent"
 
     # gemma-4-31b-it

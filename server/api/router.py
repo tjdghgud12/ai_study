@@ -1,11 +1,13 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, Depends, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from redis import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
+from db.redis import get_redis
 from db.session import get_db
 from lib.security import decode_access_token
 from schemas.chat_schema import ChatRequest, ChatResponse
@@ -33,6 +35,7 @@ async def chat_with_agent(request: ChatRequest):
 async def chat_stream(
     request: ChatRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
+    redis: Annotated[Redis, Depends(get_redis)],
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)] = None,
     cookie_token: Annotated[str | None, Cookie(alias="access_token")] = None,
 ):
@@ -52,22 +55,30 @@ async def chat_stream(
 @router.get("/chat/sessions")
 async def get_sessions_api(
     db: Annotated[AsyncSession, Depends(get_db)],
+    redis: Annotated[Redis, Depends(get_redis)],
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)] = None,
     cookie_token: Annotated[str | None, Cookie(alias="access_token")] = None,
 ):
     token = credentials.credentials if credentials else cookie_token
-    return await get_sessions(token=token, db=db)
+    if not token:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    return await get_sessions(db=db, redis=redis, token=token)
 
 
 @router.get("/chat/messages")
 async def get_chat_messages_api(
     session_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
+    redis: Annotated[Redis, Depends(get_redis)],
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)] = None,
     cookie_token: Annotated[str | None, Cookie(alias="access_token")] = None,
 ):
     token = credentials.credentials if credentials else cookie_token
-    return await get_chat_messages(session_id=session_id, token=token, db=db)
+    if not token:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    return await get_chat_messages(session_id=session_id, db=db, redis=redis, token=token)
 
 
 @router.post("/sign-up")
