@@ -60,6 +60,7 @@ const useSendChat = ({ setSessionId, chatHistoryRefetch }: { setSessionId: (sess
         if (!prev) return { message: "응답을 불러오지 못했습니다.", role: "ai" as const, messageId: "" };
         return { ...prev, message: "응답을 불러오지 못했습니다." };
       });
+      setIsFirstChunk(false);
       setRequestMessage(null);
     },
   });

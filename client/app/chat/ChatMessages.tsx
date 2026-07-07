@@ -9,9 +9,9 @@ import useSendChat from "@/hooks/useSendChat";
 import { useMemo, useState } from "react";
 
 const ChatMessages = ({ sessionId, setSessionId }: { sessionId: string; setSessionId: (sessionId: string) => void }) => {
-  const [prevSessionId, setPrevSessionId] = useState<string>(sessionId);
+  const [isStreaming, setIsStreaming] = useState<boolean>(false);
 
-  const { data: chatHistory, isLoading: isChatHistoryLoading, refetch: chatHistoryRefetch } = useChatHistory({ sessionId });
+  const { data: chatHistory, isLoading: isChatHistoryLoading, refetch: chatHistoryRefetch } = useChatHistory({ sessionId, enabled: !isStreaming });
   const {
     mutate: sendMessage,
     isFirstChunk,
@@ -19,19 +19,21 @@ const ChatMessages = ({ sessionId, setSessionId }: { sessionId: string; setSessi
     responseMessage,
     requestMessage,
   } = useSendChat({
-    setSessionId: setSessionId,
-    chatHistoryRefetch: chatHistoryRefetch,
+    setSessionId: (id) => {
+      setIsStreaming(true);
+      setSessionId(id);
+    },
+    chatHistoryRefetch: async () => {
+      setIsStreaming(false);
+      await chatHistoryRefetch();
+    },
   });
-
-  if (prevSessionId !== sessionId) {
-    setPrevSessionId(sessionId);
-  }
 
   const onSubmit = (message: string) => {
     sendMessage({ message, sessionId });
   };
 
-  const history = useMemo(() => {
+  const messages = useMemo(() => {
     return [...(chatHistory ?? []), requestMessage, responseMessage].filter((item) => item !== null);
   }, [chatHistory, responseMessage, requestMessage]);
 
@@ -43,7 +45,7 @@ const ChatMessages = ({ sessionId, setSessionId }: { sessionId: string; setSessi
           {isChatHistoryLoading && !isSendMessagePending ? (
             <Spinner className="w-10 h-10 m-auto" />
           ) : (
-            history.map((item, index) => (
+            messages.map((item, index) => (
               <SpeechBubble key={item.role === "ai" ? item.messageId : index} message={item.message} sender={item.role} isLoading={isChatHistoryLoading} />
             ))
           )}
