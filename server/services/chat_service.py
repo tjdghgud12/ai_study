@@ -16,16 +16,22 @@ from lib.mcp_tools import McpTools
 from lib.security import decode_access_token
 from repositories.messages_repository import create_messages, get_messages_data
 from repositories.sessions_repository import create_session, get_sessions_data, update_session
+from schemas.base_schema import BaseSchema
 from schemas.chat_schema import (
     ChatResponse,
     ChatStreamDelta,
     ChatStreamDone,
     ChatStreamError,
     ChatStreamNewSession,
+    ChatStreamProgress,
     MessageResponse,
     SessionResponse,
 )
 from schemas.llm_response_schema import LlmResponse, RouterResponse
+
+
+def _response_encode_event(model: BaseSchema) -> str:
+    return model.model_dump_json(by_alias=True) + "\n"
 
 
 class CatAgentService:
@@ -197,33 +203,49 @@ class CatAgentService:
         session_id: str | None = None,
     ) -> AsyncIterator[str]:
         message_id = self.create_message_id()
+        session_sequence: int | None = None
+
+        def _response_progress(detail: str) -> str:
+            return _response_encode_event(
+                ChatStreamProgress(message_id=message_id, session_id=session_id, detail=detail)
+            )
+
+        async def _response_error(detail: str) -> str:
+            if session_sequence is not None:
+                await create_messages(
+                    db=db,
+                    redis=redis,
+                    user_id=user_id,
+                    session_id=session_id,
+                    message_id=message_id,
+                    message="응답을 불러오지 못했습니다.",
+                    sequence=session_sequence,
+                    role="ai",
+                )
+            return _response_encode_event(ChatStreamError(message_id=message_id, detail=detail))
 
         if session_id is None:
             session_id = self.create_session_id()
+            yield _response_progress("신규 세션 생성 중...")
             session_update = await create_session(db, redis, user_id, session_id, user_input[:50])
-
-            yield (
+            yield _response_encode_event(
                 ChatStreamNewSession(
                     message_id=message_id,
                     session_id=session_update.id,
                     session_title=session_update.title,
                     created_at=session_update.created_at,
                     updated_at=session_update.updated_at,
-                ).model_dump_json(by_alias=True)
-                + "\n"
+                )
             )
+
         else:
+            yield _response_progress("세션 정보 조회 중...")
             session_update = await update_session(db, redis, user_id, session_id)
 
         if session_update is None:
-            yield (
-                ChatStreamError(
-                    message_id=message_id,
-                    detail="Session not found",
-                ).model_dump_json(by_alias=True)
-                + "\n"
-            )
+            yield await _response_error("Session not found")
             return
+        session_sequence = session_update.next_sequence - 1
 
         await create_messages(
             db=db,
@@ -232,22 +254,33 @@ class CatAgentService:
             session_id=session_id,
             message_id=message_id,
             message=user_input,
-            sequence=session_update.next_sequence - 2,
+            sequence=session_sequence - 1,
             role="user",
         )
 
-        need_search = await self._router_agent.ainvoke(
-            {"messages": [{"role": "user", "content": user_input}]}
-        )
-        cat_agent = (
-            self._search_stream_agent
-            if need_search.get("structured_response").use_search_tool
-            else self._no_search_stream_agent
-        )
+        yield _response_progress("모델 라우팅 중...")
+        try:
+            need_search = (
+                (
+                    await self._router_agent.ainvoke(
+                        {"messages": [{"role": "user", "content": user_input}]}
+                    )
+                )
+                .get("structured_response")
+                .use_search_tool
+            )
+        except Exception as exc:
+            yield await _response_error(f"모델 라우팅 중 오류가 발생했습니다: {exc}")
+            return
+
+        cat_agent = self._search_stream_agent if need_search else self._no_search_stream_agent
 
         all_messages: list[Any] = []
         chat_reply = ""
 
+        yield _response_progress("요청 분석 중...")
+
+        tools_completed = False
         async for mode, chunk in cat_agent.astream(
             {"messages": [{"role": "user", "content": user_input}]},
             stream_mode=["messages", "updates"],
@@ -260,33 +293,31 @@ class CatAgentService:
                 if not delta:
                     continue
                 chat_reply += delta
-                delta_event = ChatStreamDelta(message_id=message_id, chat_reply=delta)
-                yield (delta_event.model_dump_json(by_alias=True) + "\n")
+                yield _response_encode_event(
+                    ChatStreamDelta(message_id=message_id, chat_reply=delta)
+                )
             elif mode == "updates":
-                for update_item in chunk.values():
+                for node_name, update_item in chunk.items():
+                    if node_name == "tools":
+                        tools_completed = True
+                        yield _response_progress("답변 생성 중...")
+                    elif node_name == "model":
+                        if need_search:
+                            if not tools_completed:
+                                yield _response_progress("웹 검색 중...")
+                        else:
+                            yield _response_progress("답변 생성 중...")
                     if msgs := update_item.get("messages"):
                         all_messages = msgs
 
         if not chat_reply:
             chat_reply = self._last_ai_reply(all_messages) or ""
-
         if not chat_reply:
-            yield (
-                ChatStreamError(
-                    message_id=message_id, detail="Upstream model returned an empty response"
-                ).model_dump_json(by_alias=True)
-                + "\n"
-            )
+            yield await _response_error("모델로부터 빈 응답을 받았습니다.")
             return
 
         if self._filter_chat_reply_not_allow_url(chat_reply):
-            yield (
-                ChatStreamError(
-                    message_id=message_id,
-                    detail="Response contained bare URLs outside anchor tokens",
-                ).model_dump_json(by_alias=True)
-                + "\n"
-            )
+            yield await _response_error("허용되지 않은 URL이 포함되어 있습니다.")
             return
 
         final = self._parse_llm_messages(chat_reply, all_messages)
@@ -299,19 +330,18 @@ class CatAgentService:
             session_id=session_id,
             message_id=message_id,
             message=final.chat_reply,
-            sequence=session_update.next_sequence - 1,
+            sequence=session_sequence,
             role="ai",
         )
 
-        yield (
+        yield _response_encode_event(
             ChatStreamDone(
                 **final.model_dump(),
                 message_id=message_id,
                 title=session_update.title,
                 created_at=session_update.created_at,
                 updated_at=session_update.updated_at,
-            ).model_dump_json(by_alias=True)
-            + "\n"
+            )
         )
 
     def create_session_id(self) -> str:

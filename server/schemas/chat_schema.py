@@ -27,6 +27,14 @@ class ChatStreamNewSession(BaseSchema):
     session_title: str | None = None
     created_at: datetime
     updated_at: datetime
+    detail: str = "신규 세션 생성 완료"
+
+
+class ChatStreamProgress(BaseSchema):
+    type: Literal["progress"] = "progress"
+    message_id: str
+    session_id: str
+    detail: str
 
 
 class ChatStreamDelta(BaseSchema):
