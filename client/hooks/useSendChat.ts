@@ -13,7 +13,7 @@ const useSendChat = ({ setSessionId, chatHistoryRefetch }: { setSessionId: (sess
   const [responseMessage, setResponseMessage] = useState<IMessage | null>(null);
   const [requestMessage, setRequestMessage] = useState<IMessage | null>(null);
   const [isFirstChunk, setIsFirstChunk] = useState<boolean>(false);
-
+  const [progressMessage, setProgressMessage] = useState<IMessage | null>(null);
   const chatMutation = useMutation({
     mutationFn: async ({ message, sessionId }: { message: string; sessionId: string | null }) => {
       setIsFirstChunk(true);
@@ -29,8 +29,14 @@ const useSendChat = ({ setSessionId, chatHistoryRefetch }: { setSessionId: (sess
       for await (const chunk of parseStream(response)) {
         if (chunk.type === "newSession") {
           setSessionId(chunk.sessionId ?? "");
+        } else if (chunk.type === "progress") {
+          setProgressMessage((prev) => {
+            if (!prev) return { message: chunk.message, role: "ai" as const, messageId: chunk.messageId };
+            return { ...prev, message: chunk.message };
+          });
         } else if (chunk.type === "text") {
           if (firstChunkCheck) {
+            setProgressMessage(null);
             setIsFirstChunk(false);
             firstChunkCheck = false;
           }
@@ -43,7 +49,7 @@ const useSendChat = ({ setSessionId, chatHistoryRefetch }: { setSessionId: (sess
           break;
         } else if (chunk.type === "error") {
           setIsFirstChunk(false);
-
+          setProgressMessage(null);
           throw new Error(chunk.message);
         }
       }
@@ -62,6 +68,7 @@ const useSendChat = ({ setSessionId, chatHistoryRefetch }: { setSessionId: (sess
       });
       setIsFirstChunk(false);
       setRequestMessage(null);
+      setProgressMessage(null);
     },
   });
 
@@ -70,6 +77,7 @@ const useSendChat = ({ setSessionId, chatHistoryRefetch }: { setSessionId: (sess
     isFirstChunk,
     responseMessage,
     requestMessage,
+    progressMessage,
   };
 };
 

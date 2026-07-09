@@ -3,7 +3,7 @@ import ReactMarkdown from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 
-const SpeechBubble = ({ message, sender, isLoading }: { message: string | null; sender: string; isLoading?: boolean }) => {
+const SpeechBubble = ({ message, progressMessage, sender, isLoading }: { message: string | null; progressMessage?: string | null; sender: string; isLoading?: boolean }) => {
   const shouldShowSpinner = sender === "ai" && isLoading;
   const normalizedMessage = (message ?? "").replace(/\\n/g, "\n");
 
@@ -27,7 +27,12 @@ const SpeechBubble = ({ message, sender, isLoading }: { message: string | null; 
       ) : (
         <p className="w-fit h-fit whitespace-pre-wrap break-all">{message}</p>
       )}
-      {shouldShowSpinner && <Spinner />}
+      {shouldShowSpinner && (
+        <div className="flex flex-col">
+          <Spinner />
+          {progressMessage && <p className="text-gray-300 text-sm mt-1">{progressMessage}</p>}
+        </div>
+      )}
     </div>
   );
 };

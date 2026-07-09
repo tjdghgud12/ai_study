@@ -18,6 +18,7 @@ const ChatMessages = ({ sessionId, setSessionId }: { sessionId: string; setSessi
     isPending: isSendMessagePending,
     responseMessage,
     requestMessage,
+    progressMessage,
   } = useSendChat({
     setSessionId: (id) => {
       setIsStreaming(true);
@@ -42,14 +43,14 @@ const ChatMessages = ({ sessionId, setSessionId }: { sessionId: string; setSessi
       <ApiStatusIcon live={false} className="w-[60%] h-[60%] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-10" />
       <div className="w-full h-full flex-1 flex flex-col gap-4 z-10 min-h-0">
         <div className="flex-1 flex flex-col gap-2 overflow-y-auto">
-          {isChatHistoryLoading && !isSendMessagePending ? (
+          {isChatHistoryLoading && !isSendMessagePending && !isStreaming ? (
             <Spinner className="w-10 h-10 m-auto" />
           ) : (
             messages.map((item, index) => (
               <SpeechBubble key={item.role === "ai" ? item.messageId : index} message={item.message} sender={item.role} isLoading={isChatHistoryLoading} />
             ))
           )}
-          {isFirstChunk && <SpeechBubble key="check-first-chunk" message={null} sender="ai" isLoading={true} />}
+          {isFirstChunk && <SpeechBubble key="check-first-chunk" message={null} progressMessage={progressMessage?.message} sender="ai" isLoading={true} />}
         </div>
 
         <ChatInput isPending={isSendMessagePending} onSubmit={onSubmit} />

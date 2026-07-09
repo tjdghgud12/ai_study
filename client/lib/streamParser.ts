@@ -1,5 +1,5 @@
 export interface StreamChunk {
-  type: "text" | "urls" | "done" | "error" | "newSession";
+  type: "text" | "urls" | "done" | "error" | "newSession" | "progress";
   message: string;
   messageId: string;
   sessionId?: string;
@@ -34,6 +34,14 @@ function parseLineContent(content: string): StreamChunk {
         sessionTitle: parsed.sessionTitle ?? null,
         createdAt: parsed.createdAt ?? "",
         updatedAt: parsed.updatedAt ?? "",
+      };
+    }
+    if (parsed.type === "progress") {
+      return {
+        type: "progress",
+        message: parsed.detail ?? "",
+        messageId: parsed.messageId ?? "",
+        sessionId: parsed.sessionId ?? "",
       };
     }
     if (parsed.type === "delta") {
