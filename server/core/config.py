@@ -33,13 +33,14 @@ class Settings(BaseSettings):
 
     # gemma-4-31b-it
     # gemini-3.1-flash-lite
+    # gemma-4-26b-a4b-it
     main_llm_config: AiModelConfig = {
         "model": "gemini-3.1-flash-lite",
         "temperature": 0.2,
     }
 
     router_llm_config: AiModelConfig = {
-        "model": "gemma-4-26b-a4b-it",
+        "model": "gemini-3.1-flash-lite",
         "temperature": 0.1,
     }
 

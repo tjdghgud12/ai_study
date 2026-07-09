@@ -6,7 +6,14 @@ from typing import Any
 
 from fastapi import HTTPException
 from langchain.agents import create_agent
-from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, ToolMessage
+from langchain_core.messages import (
+    AIMessage,
+    AIMessageChunk,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from langchain_google_genai import ChatGoogleGenerativeAI
 from redis import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,6 +55,8 @@ class CatAgentService:
         self.router_llm = ChatGoogleGenerativeAI(
             **settings.router_llm_config, google_api_key=settings.google_api_key
         )
+
+        self._router_llm_structured = self.router_llm.with_structured_output(RouterResponse)
 
         self.search_system_prompt = """
         You are Cat Care Agent with web search. Answer in Korean.
@@ -135,11 +144,11 @@ class CatAgentService:
             system_prompt=self.no_search_system_prompt,
             response_format=LlmResponse,
         )
-        self._router_agent = create_agent(
-            model=self.router_llm,
-            system_prompt=self.router_system_prompt,
-            response_format=RouterResponse,
-        )
+        # self._router_agent = create_agent(
+        #     model=self.router_llm,
+        #     system_prompt=self.router_system_prompt,
+        #     response_format=RouterResponse,
+        # )
         # structured output 사용 시 Gemini는 토큰 스트림 대신 마지막 ToolMessage로만 응답함
         self._search_stream_agent = create_agent(
             model=self.llm,
@@ -157,15 +166,9 @@ class CatAgentService:
         if session_id is None:
             session_id = self.create_session_id()
 
-        need_search = await self._router_agent.ainvoke(
-            {"messages": [{"role": "user", "content": user_input}]}
-        )
+        need_search = await self._route_need_search(user_input)
 
-        cat_agent = (
-            self._search_agent
-            if need_search.get("structured_response").use_search_tool
-            else self._no_search_agent
-        )
+        cat_agent = self._search_agent if need_search else self._no_search_agent
 
         for _ in range(3):  # 최초 1회 + 재시도 1회
             try:
@@ -260,15 +263,7 @@ class CatAgentService:
 
         yield _response_progress("모델 라우팅 중...")
         try:
-            need_search = (
-                (
-                    await self._router_agent.ainvoke(
-                        {"messages": [{"role": "user", "content": user_input}]}
-                    )
-                )
-                .get("structured_response")
-                .use_search_tool
-            )
+            need_search = await self._route_need_search(user_input)
         except Exception as exc:
             yield await _response_error(f"모델 라우팅 중 오류가 발생했습니다: {exc}")
             return
@@ -446,6 +441,15 @@ class CatAgentService:
                 if isinstance(block, dict) and block.get("type") == "text"
             )
         return str(content) if content else ""
+
+    async def _route_need_search(self, user_input: str) -> bool:
+        result: RouterResponse = await self._router_llm_structured.ainvoke(
+            [
+                SystemMessage(content=self.router_system_prompt),
+                HumanMessage(content=user_input),
+            ]
+        )
+        return result.use_search_tool
 
 
 async def get_sessions(db: AsyncSession, redis: Redis, token: str) -> list[SessionResponse]:
