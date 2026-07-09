@@ -9,7 +9,15 @@ interface IMessage {
   role: "user" | "ai";
 }
 
-const useSendChat = ({ setSessionId, chatHistoryRefetch }: { setSessionId: (sessionId: string) => void; chatHistoryRefetch?: () => Promise<unknown> }) => {
+const useSendChat = ({
+  setSessionId,
+  chatHistoryRefetch,
+  onStreamComplete,
+}: {
+  setSessionId: (sessionId: string) => void;
+  chatHistoryRefetch?: () => Promise<unknown>;
+  onStreamComplete?: () => void;
+}) => {
   const [responseMessage, setResponseMessage] = useState<IMessage | null>(null);
   const [requestMessage, setRequestMessage] = useState<IMessage | null>(null);
   const [isFirstChunk, setIsFirstChunk] = useState<boolean>(false);
@@ -54,21 +62,32 @@ const useSendChat = ({ setSessionId, chatHistoryRefetch }: { setSessionId: (sess
         }
       }
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      if (chatHistoryRefetch) await chatHistoryRefetch();
+
+      setResponseMessage(null);
+      setRequestMessage(null);
+      setIsFirstChunk(false);
+      setProgressMessage(null);
+      onStreamComplete?.();
+    },
+    onError: () => {
       if (chatHistoryRefetch)
         chatHistoryRefetch().then(() => {
           setResponseMessage(null);
+          setIsFirstChunk(false);
           setRequestMessage(null);
+          setProgressMessage(null);
         });
-    },
-    onError: () => {
-      setResponseMessage((prev) => {
-        if (!prev) return { message: "응답을 불러오지 못했습니다.", role: "ai" as const, messageId: "" };
-        return { ...prev, message: "응답을 불러오지 못했습니다." };
-      });
-      setIsFirstChunk(false);
-      setRequestMessage(null);
-      setProgressMessage(null);
+      else {
+        setResponseMessage((prev) => {
+          if (!prev) return { message: "응답을 불러오지 못했습니다.", role: "ai" as const, messageId: "" };
+          return { ...prev, message: "응답을 불러오지 못했습니다." };
+        });
+        setIsFirstChunk(false);
+        setRequestMessage(null);
+        setProgressMessage(null);
+      }
     },
   });
 

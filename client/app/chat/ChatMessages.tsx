@@ -20,34 +20,36 @@ const ChatMessages = ({ sessionId, setSessionId }: { sessionId: string; setSessi
     requestMessage,
     progressMessage,
   } = useSendChat({
-    setSessionId: (id) => {
-      setIsStreaming(true);
-      setSessionId(id);
-    },
-    chatHistoryRefetch: async () => {
-      setIsStreaming(false);
-      await chatHistoryRefetch();
-    },
+    setSessionId,
+    chatHistoryRefetch,
+    onStreamComplete: () => setIsStreaming(false),
   });
 
   const onSubmit = (message: string) => {
+    setIsStreaming(true);
     sendMessage({ message, sessionId });
   };
 
   const messages = useMemo(() => {
-    return [...(chatHistory ?? []), requestMessage, responseMessage].filter((item) => item !== null);
+    const history = chatHistory ?? [];
+    if (requestMessage || responseMessage) {
+      return [...history, requestMessage, responseMessage].filter((item) => item !== null);
+    }
+    return history;
   }, [chatHistory, responseMessage, requestMessage]);
+
+  const showHistorySpinner = isChatHistoryLoading && chatHistory === undefined && !isSendMessagePending && !isStreaming;
 
   return (
     <div className="w-full min-w-sm h-full flex bg-gray-50 rounded-3xl p-4 relative">
       <ApiStatusIcon live={false} className="w-[60%] h-[60%] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-10" />
       <div className="w-full h-full flex-1 flex flex-col gap-4 z-10 min-h-0">
         <div className="flex-1 flex flex-col gap-2 overflow-y-auto">
-          {isChatHistoryLoading && !isSendMessagePending && !isStreaming ? (
+          {showHistorySpinner ? (
             <Spinner className="w-10 h-10 m-auto" />
           ) : (
             messages.map((item, index) => (
-              <SpeechBubble key={item.role === "ai" ? item.messageId : index} message={item.message} sender={item.role} isLoading={isChatHistoryLoading} />
+              <SpeechBubble key={item.role === "ai" ? item.messageId : index} message={item.message} sender={item.role} />
             ))
           )}
           {isFirstChunk && <SpeechBubble key="check-first-chunk" message={null} progressMessage={progressMessage?.message} sender="ai" isLoading={true} />}

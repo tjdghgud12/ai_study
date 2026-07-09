@@ -1,6 +1,6 @@
 import apiFetch from "@/lib/apiFetch";
 import { HttpError } from "@/lib/httpError";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 interface ChatHistory {
   message: string;
@@ -17,6 +17,7 @@ const useChatHistory = ({ sessionId, enabled }: { sessionId: string; enabled?: b
       return response.json() as Promise<ChatHistory[]>;
     },
     enabled: enabled ?? true,
+    placeholderData: keepPreviousData,
   });
 
   return chatHistoryQuery;
