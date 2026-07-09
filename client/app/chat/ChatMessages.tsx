@@ -11,7 +11,13 @@ import { useMemo, useState } from "react";
 const ChatMessages = ({ sessionId, setSessionId }: { sessionId: string; setSessionId: (sessionId: string) => void }) => {
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
 
-  const { data: chatHistory, isLoading: isChatHistoryLoading, refetch: chatHistoryRefetch } = useChatHistory({ sessionId, enabled: !isStreaming });
+  const {
+    data: chatHistory,
+    isLoading: isChatHistoryLoading,
+    isFetching: isChatHistoryFetching,
+    isPlaceholderData: isChatHistoryPlaceholder,
+    refetch: chatHistoryRefetch,
+  } = useChatHistory({ sessionId, enabled: !isStreaming });
   const {
     mutate: sendMessage,
     isFirstChunk,
@@ -38,7 +44,7 @@ const ChatMessages = ({ sessionId, setSessionId }: { sessionId: string; setSessi
     return history;
   }, [chatHistory, responseMessage, requestMessage]);
 
-  const showHistorySpinner = isChatHistoryLoading && chatHistory === undefined && !isSendMessagePending && !isStreaming;
+  const showHistorySpinner = !isSendMessagePending && !isStreaming && (isChatHistoryLoading || (isChatHistoryFetching && isChatHistoryPlaceholder));
 
   return (
     <div className="w-full min-w-sm h-full flex bg-gray-50 rounded-3xl p-4 relative">
@@ -48,9 +54,7 @@ const ChatMessages = ({ sessionId, setSessionId }: { sessionId: string; setSessi
           {showHistorySpinner ? (
             <Spinner className="w-10 h-10 m-auto" />
           ) : (
-            messages.map((item, index) => (
-              <SpeechBubble key={item.role === "ai" ? item.messageId : index} message={item.message} sender={item.role} />
-            ))
+            messages.map((item, index) => <SpeechBubble key={item.role === "ai" ? item.messageId : index} message={item.message} sender={item.role} />)
           )}
           {isFirstChunk && <SpeechBubble key="check-first-chunk" message={null} progressMessage={progressMessage?.message} sender="ai" isLoading={true} />}
         </div>
