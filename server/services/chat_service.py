@@ -21,7 +21,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.config import settings
 from lib.mcp_tools import McpTools
 from lib.security import decode_access_token
-from repositories.messages_repository import create_messages, get_messages_data
+from repositories.messages_repository import (
+    create_messages,
+    get_messages_data,
+)
 from repositories.sessions_repository import create_session, get_sessions_data, update_session
 from schemas.base_schema import BaseSchema
 from schemas.chat_schema import (
@@ -250,6 +253,9 @@ class CatAgentService:
             return
         session_sequence = session_update.next_sequence - 1
 
+        chat_history = await get_messages_data(db, redis, user_id, session_id)
+        chat_history = [{"role": m.role, "content": m.message} for m in chat_history]
+
         await create_messages(
             db=db,
             redis=redis,
@@ -277,7 +283,7 @@ class CatAgentService:
 
         tools_completed = False
         async for mode, chunk in cat_agent.astream(
-            {"messages": [{"role": "user", "content": user_input}]},
+            {"messages": [*chat_history, {"role": "user", "content": user_input}]},
             stream_mode=["messages", "updates"],
         ):
             if mode == "messages":
