@@ -5,7 +5,6 @@ from sqlalchemy import insert, inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.messages_model import Messages
-from models.sessions_model import Sessions
 
 
 def messages_to_json_string(messages: Messages) -> str:
