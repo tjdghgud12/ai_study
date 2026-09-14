@@ -1,5 +1,5 @@
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, func
-from sqlalchemy.dialects.postgresql import ENUM
+from sqlalchemy.dialects.postgresql import ENUM, JSONB
 
 from db.base import Base
 
@@ -15,4 +15,5 @@ class Messages(Base):
     role = Column(message_type_enum, nullable=False)
     sequence = Column(Integer)
     message = Column(String)
+    attachments = Column(JSONB, nullable=False, server_default="[]")
     created_at = Column(DateTime, server_default=func.now())

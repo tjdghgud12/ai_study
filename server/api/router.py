@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
+from fastapi import APIRouter, Cookie, Depends, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from redis import Redis
@@ -31,23 +31,29 @@ async def chat_with_agent(request: ChatRequest):
     return await cat_agent.ask_question(request.message, request.session_id)
 
 
+# file을 넘겨받기 위해 해당 api는 front에서 formData를 사용해 넘겨주는 방식을 채택
 @router.post("/chat/stream")
 async def chat_stream(
-    request: ChatRequest,
+    # request: Annotated[ChatRequest, Form()],
     db: Annotated[AsyncSession, Depends(get_db)],
     redis: Annotated[Redis, Depends(get_redis)],
+    message: Annotated[str, Form()],
+    user_id: Annotated[str | None, Form()] = None,
+    session_id: Annotated[str | None, Form()] = None,
+    images: Annotated[list[UploadFile] | None, File()] = None,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)] = None,
     cookie_token: Annotated[str | None, Cookie(alias="access_token")] = None,
 ):
     token = credentials.credentials if credentials else cookie_token
-    user_id = decode_access_token(token)
+    token_user_id = decode_access_token(token)
     return StreamingResponse(
         cat_agent.ask_question_stream(
-            user_input=request.message,
+            user_input=message,
             db=db,
             redis=redis,
-            user_id=request.user_id or user_id,
-            session_id=request.session_id,
+            user_id=user_id or token_user_id,
+            session_id=session_id,
+            images=images,
         ),
         media_type="application/x-ndjson",
     )

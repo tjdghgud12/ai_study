@@ -27,7 +27,8 @@ async def create_messages(
     message: str,
     sequence: int,
     role: str,
-) -> Sessions:
+    attachments: list[dict] | None = None,
+) -> Messages:
     message = (
         (
             await db.execute(
@@ -39,6 +40,7 @@ async def create_messages(
                     role=role,
                     sequence=sequence,
                     message=message,
+                    attachments=attachments or [],
                 )
                 .returning(Messages)
             )

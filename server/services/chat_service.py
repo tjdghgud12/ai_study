@@ -1,10 +1,11 @@
+import base64
 import json
 import re
 import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
 from langchain.agents import create_agent
 from langchain_core.messages import (
     AIMessage,
@@ -21,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.config import settings
 from lib.mcp_tools import McpTools
 from lib.security import decode_access_token
+from lib.storage import save_chat_images, to_attachment_info
 from repositories.messages_repository import (
     create_messages,
     get_messages_data,
@@ -42,6 +44,23 @@ from schemas.llm_response_schema import LlmResponse, RouterResponse
 
 def _response_encode_event(model: BaseSchema) -> str:
     return model.model_dump_json(by_alias=True) + "\n"
+
+
+async def _build_user_content(user_input: str, images: list[UploadFile] | None) -> str | list[dict]:
+    if not images:
+        return user_input
+
+    content: list[dict] = [{"type": "text", "text": user_input}]
+    for image in images:
+        raw = await image.read()
+        content.append(
+            {
+                "type": "image",
+                "base64": base64.b64encode(raw).decode("utf-8"),
+                "mime_type": image.content_type or "image/jpeg",
+            }
+        )
+    return content
 
 
 class CatAgentService:
@@ -207,6 +226,7 @@ class CatAgentService:
         redis: Redis,
         user_id: str | None = None,
         session_id: str | None = None,
+        images: list[UploadFile] | None = None,
     ) -> AsyncIterator[str]:
         message_id = self.create_message_id()
         session_sequence: int | None = None
@@ -256,6 +276,12 @@ class CatAgentService:
         chat_history = await get_messages_data(db, redis, user_id, session_id)
         chat_history = [{"role": m.role, "content": m.message} for m in chat_history]
 
+        attachments = await save_chat_images(
+            images,
+            user_id=user_id or "anonymous",
+            session_id=session_id,
+        )
+
         await create_messages(
             db=db,
             redis=redis,
@@ -265,6 +291,7 @@ class CatAgentService:
             message=user_input,
             sequence=session_sequence - 1,
             role="user",
+            attachments=attachments,
         )
 
         yield _response_progress("모델 라우팅 중...")
@@ -282,8 +309,9 @@ class CatAgentService:
         yield _response_progress("요청 분석 중...")
 
         tools_completed = False
+        user_content = await _build_user_content(user_input, images)
         async for mode, chunk in cat_agent.astream(
-            {"messages": [*chat_history, {"role": "user", "content": user_input}]},
+            {"messages": [*chat_history, {"role": "user", "content": user_content}]},
             stream_mode=["messages", "updates"],
         ):
             if mode == "messages":
@@ -321,7 +349,11 @@ class CatAgentService:
             yield await _response_error("허용되지 않은 URL이 포함되어 있습니다.")
             return
 
-        final = self._parse_llm_messages(chat_reply, all_messages)
+        final = self._parse_llm_messages(
+            chat_reply,
+            all_messages,
+            attachments=[to_attachment_info(attachment) for attachment in attachments],
+        )
         final.session_id = session_update.id
 
         await create_messages(
@@ -389,7 +421,12 @@ class CatAgentService:
 
         return url_by_title
 
-    def _parse_llm_messages(self, chat_reply: str, messages: list[Any]) -> ChatResponse:
+    def _parse_llm_messages(
+        self,
+        chat_reply: str,
+        messages: list[Any],
+        attachments: list[dict] | None = None,
+    ) -> ChatResponse:
         used_tools = [
             m for m in messages if isinstance(m, ToolMessage) and m.name != LlmResponse.__name__
         ]
@@ -416,7 +453,11 @@ class CatAgentService:
         chat_reply = chat_reply.replace("{{{", "").replace("}}}", "")
 
         return ChatResponse(
-            session_id="", chat_reply=chat_reply, used_tools=tool_names, tool_data=tool_data
+            session_id="",
+            chat_reply=chat_reply,
+            used_tools=tool_names,
+            tool_data=tool_data,
+            attachments=attachments or [],
         )
 
     def _filter_chat_reply_not_allow_url(self, chat_reply: str) -> bool:
@@ -487,6 +528,9 @@ async def get_chat_messages(
             sequence=message.sequence,
             message=message.message,
             created_at=message.created_at,
+            attachments=[
+                to_attachment_info(attachment) for attachment in (message.attachments or [])
+            ],
         )
         for message in messages
     ]

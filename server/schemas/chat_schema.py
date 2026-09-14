@@ -13,11 +13,18 @@ class ChatRequest(BaseSchema):
     session_id: str | None = None
 
 
+class AttachmentResponse(BaseSchema):
+    url: str
+    mime_type: str
+    original_filename: str | None = None
+
+
 class ChatResponse(BaseSchema):
     session_id: str
     chat_reply: str
     used_tools: list[str] = Field(default_factory=list)
     tool_data: dict[str, Any] = Field(default_factory=dict)
+    attachments: list[AttachmentResponse] = Field(default_factory=list)
 
 
 class ChatStreamNewSession(BaseSchema):
@@ -73,3 +80,4 @@ class MessageResponse(BaseSchema):
     sequence: int
     message: str
     created_at: datetime
+    attachments: list[AttachmentResponse] = Field(default_factory=list)
