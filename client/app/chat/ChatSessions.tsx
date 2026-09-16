@@ -4,7 +4,15 @@ import { useGetSessions } from "@/hooks/useSession";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 
-const ChatSessions = ({ selectedSessionId, setSelectedSessionId }: { selectedSessionId: string; setSelectedSessionId: (sessionId: string) => void }) => {
+const ChatSessions = ({
+  selectedSessionId,
+  setSelectedSessionId,
+  isStreaming,
+}: {
+  selectedSessionId: string;
+  setSelectedSessionId: (sessionId: string) => void;
+  isStreaming: boolean;
+}) => {
   const { data: sessions, isPending, refetch } = useGetSessions();
   const [sessionId, setSessionId] = useState<string>(selectedSessionId);
 
@@ -13,6 +21,7 @@ const ChatSessions = ({ selectedSessionId, setSelectedSessionId }: { selectedSes
   }
 
   const handleSelectSession = (sessionId: string) => {
+    if (isStreaming) return;
     setSessionId(sessionId);
     setSelectedSessionId(sessionId);
   };
@@ -25,6 +34,7 @@ const ChatSessions = ({ selectedSessionId, setSelectedSessionId }: { selectedSes
         <>
           <Button
             key={`session-new-session`}
+            disabled={isStreaming}
             className={cn(
               `w-full h-fit p-2 hover:cursor-pointer hover:scale-108 active:scale-100 transition-all duration-200 flex-none`,
               sessionId === "new session" ? "" : "bg-gray-100 text-black",
@@ -36,6 +46,7 @@ const ChatSessions = ({ selectedSessionId, setSelectedSessionId }: { selectedSes
           {(sessions ?? []).map((session, index) => (
             <Button
               key={`session-${index}`}
+              disabled={isStreaming}
               className={cn(
                 `w-full h-fit p-2 hover:cursor-pointer hover:scale-108 active:scale-100 transition-all duration-200 flex-none`,
                 sessionId === session.sessionId ? "" : "bg-gray-100 text-black",

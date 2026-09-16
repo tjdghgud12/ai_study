@@ -1,12 +1,17 @@
 import apiFetch from "@/lib/apiFetch";
+import { HttpError } from "@/lib/httpError";
 import { parseStream } from "@/lib/streamParser";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
+import { toast } from "sonner";
 
-interface IMessage {
+import type { ChatAttachment, ImageAttachment } from "@/types/chatType";
+
+interface Message {
   message: string;
   messageId: string;
   role: "user" | "ai";
+  attachments?: ChatAttachment[] | null;
 }
 
 const useSendChat = ({
@@ -18,18 +23,24 @@ const useSendChat = ({
   chatHistoryRefetch?: () => Promise<unknown>;
   onStreamComplete?: () => void;
 }) => {
-  const [responseMessage, setResponseMessage] = useState<IMessage | null>(null);
-  const [requestMessage, setRequestMessage] = useState<IMessage | null>(null);
+  const [responseMessage, setResponseMessage] = useState<Message | null>(null);
+  const [requestMessage, setRequestMessage] = useState<Message | null>(null);
   const [isFirstChunk, setIsFirstChunk] = useState<boolean>(false);
-  const [progressMessage, setProgressMessage] = useState<IMessage | null>(null);
+  const [progressMessage, setProgressMessage] = useState<Message | null>(null);
   const chatMutation = useMutation({
-    mutationFn: async ({ message, sessionId }: { message: string; sessionId: string | null }) => {
+    mutationFn: async ({ message, sessionId, images }: { message: string; sessionId: string | null; images?: ImageAttachment[] }) => {
       setIsFirstChunk(true);
       setResponseMessage(null);
-      setRequestMessage({ message, role: "user" as const, messageId: "" });
+      setRequestMessage({ message, role: "user" as const, messageId: crypto.randomUUID(), attachments: images });
+
+      const body = new FormData();
+      body.append("message", message);
+      if (sessionId && sessionId !== "new session") body.append("sessionId", sessionId);
+      if (images) images.forEach((img) => body.append("images", img.file));
+
       const response = await apiFetch(`${process.env.NEXT_PUBLIC_CAT_AGENT_API}/api/chat/stream`, {
         method: "POST",
-        body: JSON.stringify({ message: message, sessionId: sessionId === "new session" ? null : sessionId }),
+        body: body,
       });
 
       let firstChunkCheck = true;
@@ -63,23 +74,28 @@ const useSendChat = ({
       }
     },
     onSuccess: async () => {
+      onStreamComplete?.();
       if (chatHistoryRefetch) await chatHistoryRefetch();
 
       setResponseMessage(null);
       setRequestMessage(null);
       setIsFirstChunk(false);
       setProgressMessage(null);
-      onStreamComplete?.();
     },
-    onError: () => {
-      if (chatHistoryRefetch)
+    onError: (error: HttpError) => {
+      onStreamComplete?.();
+      if (chatHistoryRefetch) {
+        toast.error("응답을 불러오지 못했습니다.", {
+          description: `status: ${error.status ?? "unknown"}\nmessage: ${error.message}`,
+          classNames: { description: "whitespace-pre-line" },
+        });
         chatHistoryRefetch().then(() => {
           setResponseMessage(null);
           setIsFirstChunk(false);
           setRequestMessage(null);
           setProgressMessage(null);
         });
-      else {
+      } else {
         setResponseMessage((prev) => {
           if (!prev) return { message: "응답을 불러오지 못했습니다.", role: "ai" as const, messageId: "" };
           return { ...prev, message: "응답을 불러오지 못했습니다." };

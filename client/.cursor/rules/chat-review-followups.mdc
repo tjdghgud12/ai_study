@@ -1,0 +1,12 @@
+---
+description: 채팅창 기능 검토 요청 시, 미구현으로 미뤄 둔 항목을 다시 언급한다
+globs: app/chat/**,hooks/useSendChat.ts,hooks/useChatHistory.ts,lib/streamParser.ts,components/AttachmentImage.tsx
+alwaysApply: false
+---
+
+# 채팅창 검토 시 다시 말할 것
+
+사용자가 채팅창 기능 검토를 요청하면 아래를 포함해서 말한다.
+
+- 스트림 `done`의 `attachments`는 LLM 생성 이미지용이며 아직 미구현이다. `streamParser` / `useSendChat`이 아직 쓰지 않는다.
+- 새 메시지로 자동 스크롤은 미구현이고 추후 추가 예정이다.

@@ -6,12 +6,13 @@ import { useState } from "react";
 
 const Chat = () => {
   const [selectedSessionId, setSelectedSessionId] = useState<string>("new session");
+  const [isStreaming, setIsStreaming] = useState(false);
 
   return (
     <div className="mx-auto flex h-full min-h-0 w-2/3 flex-1 flex-row items-center justify-center gap-2">
-      <ChatSessions selectedSessionId={selectedSessionId} setSelectedSessionId={setSelectedSessionId} />
+      <ChatSessions selectedSessionId={selectedSessionId} setSelectedSessionId={setSelectedSessionId} isStreaming={isStreaming} />
       <div className="h-full min-h-0 min-w-sm flex-1">
-        <ChatMessages sessionId={selectedSessionId} setSessionId={setSelectedSessionId} />
+        <ChatMessages sessionId={selectedSessionId} setSessionId={setSelectedSessionId} isStreaming={isStreaming} setIsStreaming={setIsStreaming} />
       </div>
     </div>
   );

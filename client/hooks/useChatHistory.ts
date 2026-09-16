@@ -1,11 +1,13 @@
 import apiFetch from "@/lib/apiFetch";
 import { HttpError } from "@/lib/httpError";
+import type { AttachmentInfo } from "@/types/chatType";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 interface ChatHistory {
   message: string;
   messageId: string;
   role: "user" | "ai";
+  attachments?: AttachmentInfo[] | null;
 }
 
 const useChatHistory = ({ sessionId, enabled }: { sessionId: string; enabled?: boolean }) => {

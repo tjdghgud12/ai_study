@@ -1,3 +1,5 @@
+import type { AttachmentInfo } from "@/types/chatType";
+
 export interface StreamChunk {
   type: "text" | "urls" | "done" | "error" | "newSession" | "progress";
   message: string;
@@ -6,6 +8,7 @@ export interface StreamChunk {
   sessionTitle?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  attachments?: AttachmentInfo[] | null;
 }
 
 interface ServerStreamPayload {

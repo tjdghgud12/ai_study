@@ -1,8 +1,8 @@
-interface ISession {
+interface Session {
   sessionId: string;
   title: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-export type { ISession };
+export type { Session };

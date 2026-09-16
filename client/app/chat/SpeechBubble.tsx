@@ -1,9 +1,29 @@
+import AttachmentImage from "@/components/AttachmentImage";
 import { Spinner } from "@/components/ui/spinner";
+import type { ChatAttachment } from "@/types/chatType";
 import ReactMarkdown from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 
-const SpeechBubble = ({ message, progressMessage, sender, isLoading }: { message: string | null; progressMessage?: string | null; sender: string; isLoading?: boolean }) => {
+const getAttachmentSrc = (attachment: ChatAttachment): string | null => {
+  if ("previewUrl" in attachment && attachment.previewUrl) return attachment.previewUrl;
+  if ("url" in attachment && attachment.url) return `${process.env.NEXT_PUBLIC_CAT_AGENT_API}${attachment.url}`;
+  return null;
+};
+
+const SpeechBubble = ({
+  message,
+  progressMessage,
+  sender,
+  isLoading,
+  attachments,
+}: {
+  message: string | null;
+  progressMessage?: string | null;
+  sender: string;
+  isLoading?: boolean;
+  attachments?: ChatAttachment[] | null;
+}) => {
   const shouldShowSpinner = sender === "ai" && isLoading;
   const normalizedMessage = (message ?? "").replace(/\\n/g, "\n");
 
@@ -24,13 +44,27 @@ const SpeechBubble = ({ message, progressMessage, sender, isLoading }: { message
             {normalizedMessage}
           </ReactMarkdown>
         </div>
-      ) : (
+      ) : message ? (
         <p className="w-fit h-fit whitespace-pre-wrap break-all">{message}</p>
+      ) : (
+        <></>
       )}
       {shouldShowSpinner && (
         <div className="flex flex-col">
           <Spinner />
           {progressMessage && <p className="text-gray-300 text-sm mt-1">{progressMessage}</p>}
+        </div>
+      )}
+      {attachments && attachments.length > 0 && (
+        <div className="w-full min-w-0 overflow-x-auto">
+          <div className="flex gap-2 w-max">
+            {attachments?.map((attachment, index) => {
+              const src = getAttachmentSrc(attachment);
+              if (!src) return null;
+
+              return <AttachmentImage key={index} src={src} alt="" width={800} height={800} className="size-125 object-cover rounded-4xl" />;
+            })}
+          </div>
         </div>
       )}
     </div>
