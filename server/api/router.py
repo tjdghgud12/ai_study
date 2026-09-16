@@ -32,14 +32,14 @@ async def chat_with_agent(request: ChatRequest):
 
 
 # file을 넘겨받기 위해 해당 api는 front에서 formData를 사용해 넘겨주는 방식을 채택
+# Form() 모델과 File()을 같이 쓰면 모델이 중첩 필드로 묶이므로, 필드는 평평하게 받고 camelCase만 alias로 허용한다.
 @router.post("/chat/stream")
 async def chat_stream(
-    # request: Annotated[ChatRequest, Form()],
     db: Annotated[AsyncSession, Depends(get_db)],
     redis: Annotated[Redis, Depends(get_redis)],
     message: Annotated[str, Form()],
-    user_id: Annotated[str | None, Form()] = None,
-    session_id: Annotated[str | None, Form()] = None,
+    user_id: Annotated[str | None, Form(alias="userId")] = None,
+    session_id: Annotated[str | None, Form(alias="sessionId")] = None,
     images: Annotated[list[UploadFile] | None, File()] = None,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)] = None,
     cookie_token: Annotated[str | None, Cookie(alias="access_token")] = None,
