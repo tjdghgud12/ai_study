@@ -41,6 +41,8 @@ from schemas.chat_schema import (
 )
 from schemas.llm_response_schema import LlmResponse, RouterResponse
 
+IMAGE_ONLY_SESSION_TITLE = "이 이미지를 설명해 주세요."
+
 
 def _response_encode_event(model: BaseSchema) -> str:
     return model.model_dump_json(by_alias=True) + "\n"
@@ -253,7 +255,8 @@ class CatAgentService:
         if session_id is None:
             session_id = self.create_session_id()
             yield _response_progress("신규 세션 생성 중...")
-            session_update = await create_session(db, redis, user_id, session_id, user_input[:50])
+            session_title = (user_input.strip() or (IMAGE_ONLY_SESSION_TITLE if images else ""))[:50]
+            session_update = await create_session(db, redis, user_id, session_id, session_title)
             yield _response_encode_event(
                 ChatStreamNewSession(
                     message_id=message_id,
