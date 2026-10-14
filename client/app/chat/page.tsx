@@ -1,7 +1,7 @@
 "use client";
 
-import ChatMessages from "@/components/features/chat/ChatMessages";
-import ChatSessions from "@/components/features/chat/ChatSessions";
+import ChatMessages from "@/components/chat/ChatMessages";
+import ChatSessions from "@/components/chat/ChatSessions";
 import { useState } from "react";
 
 const Chat = () => {

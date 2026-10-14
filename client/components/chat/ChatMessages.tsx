@@ -1,8 +1,8 @@
 "use client";
 
 import AwakeSleepIcon from "@/components/AwakeSleepIcon";
-import ChatInput from "@/components/features/chat/ChatInput";
-import SpeechBubble from "@/components/features/chat/SpeechBubble";
+import ChatInput from "@/components/chat/ChatInput";
+import SpeechBubble from "@/components/chat/SpeechBubble";
 import { Spinner } from "@/components/ui/spinner";
 import useChatHistory from "@/hooks/queries/useChatHistory";
 import useSendChat from "@/hooks/queries/useSendChat";
