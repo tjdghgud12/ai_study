@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { useGetSessions } from "@/hooks/useSession";
+import { useGetSessions } from "@/hooks/queries/useSession";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 

@@ -1,11 +1,11 @@
 "use client";
 
-import ChatInput from "@/app/chat/ChatInput";
-import SpeechBubble from "@/app/chat/SpeechBubble";
-import ApiStatusIcon from "@/app/signin/ApiStatusIcon";
+import AwakeSleepIcon from "@/components/AwakeSleepIcon";
+import ChatInput from "@/components/features/chat/ChatInput";
+import SpeechBubble from "@/components/features/chat/SpeechBubble";
 import { Spinner } from "@/components/ui/spinner";
-import useChatHistory from "@/hooks/useChatHistory";
-import useSendChat from "@/hooks/useSendChat";
+import useChatHistory from "@/hooks/queries/useChatHistory";
+import useSendChat from "@/hooks/queries/useSendChat";
 import { Fragment, useMemo, useState } from "react";
 
 import type { ChatAttachment, ImageAttachment } from "@/types/chatType";
@@ -98,7 +98,7 @@ const ChatMessages = ({
 
   return (
     <div className="w-full min-w-sm h-full flex bg-gray-50 rounded-3xl p-4 relative">
-      <ApiStatusIcon live={false} className="w-[60%] h-[60%] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-10" />
+      <AwakeSleepIcon awake={false} className="w-[60%] h-[60%] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-10" />
       <div className="w-full h-full flex-1 flex flex-col gap-4 z-10 min-h-0">
         <div className="flex-1 flex flex-col gap-2 overflow-y-auto">
           {showHistorySpinner ? (
