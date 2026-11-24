@@ -11,7 +11,7 @@ from db.redis import get_redis
 from db.session import get_db
 from lib.security import decode_access_token
 from schemas.chat_schema import ChatRequest, ChatResponse
-from schemas.sign_in_schema import SignInRequestSchema
+from schemas.sign_in_schema import SignInRequestSchema, SignInWithTokenResponseSchema
 from schemas.sign_up_schema import CheckDuplicateIdRequestSchema, SignUpRequestSchema
 from services.chat_service import cat_agent, get_chat_messages, get_sessions
 from services.sign_in import sign_in, sign_in_with_token
@@ -116,12 +116,21 @@ async def sign_in_api(
 
 @router.get("/sign-in/with-token")
 async def sign_in_with_token_api(
+    response: Response,
     db: Annotated[AsyncSession, Depends(get_db)],
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)] = None,
     cookie_token: Annotated[str | None, Cookie(alias="access_token")] = None,
 ):
     token = credentials.credentials if credentials else cookie_token
-    return await sign_in_with_token(token, db)
+
+    try:
+        result = await sign_in_with_token(token, db)
+    except HTTPException as exc:
+        response.status_code = exc.status_code
+        response.delete_cookie(key="access_token", httponly=True)  # 잘못된 쿠키 제거
+        return {"detail": exc.detail}
+
+    return SignInWithTokenResponseSchema(id=result.id)
 
 
 @router.get("/sign-out")
