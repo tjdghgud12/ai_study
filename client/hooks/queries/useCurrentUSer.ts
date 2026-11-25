@@ -7,7 +7,7 @@ import { useEffect } from "react";
 const useCurrentUser = ({ onSuccess, onError }: { onSuccess?: (data: SignInWithTokenResponse) => void; onError?: (error: HttpError) => void }) => {
   const query = useQuery({
     queryKey: ["currentUser"],
-    queryFn: async () => await signInWithToken(),
+    queryFn: signInWithToken,
     retry: false,
   });
 
