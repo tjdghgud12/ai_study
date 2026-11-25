@@ -6,11 +6,11 @@ import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import * as z from "zod";
 
-import { signIn } from "@/app/api/signIn";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import useSignIn from "@/hooks/queries/useSignIn";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -26,6 +26,17 @@ const Signin = () => {
   const [seePassword, setSeePassword] = useState(false);
   const setUserInfo = useUserInfo((state) => state.setUserInfo);
 
+  const signInMutation = useSignIn({
+    onSuccess: (data) => {
+      toast.success("로그인을 완료하였습니다.");
+      setUserInfo({ id: data.id });
+      router.push("/chat");
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: standardSchemaResolver(formSchema),
     defaultValues: {
@@ -35,15 +46,7 @@ const Signin = () => {
   });
 
   const onSubmit = (data: z.infer<typeof formSchema>) => {
-    toast.promise(signIn(data.id, data.password), {
-      loading: "사용자 정보 확인 중...",
-      success: (res) => {
-        setUserInfo({ id: res.id });
-        router.push("/chat");
-        return "로그인을 완료하였습니다.";
-      },
-      error: (err) => err.message,
-    });
+    signInMutation.mutate({ id: data.id, password: data.password });
   };
 
   return (

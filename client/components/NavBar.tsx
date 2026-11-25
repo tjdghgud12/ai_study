@@ -21,6 +21,7 @@ const NavBar = () => {
   const router = useRouter();
 
   const handleSignOut = async () => {
+    // 해당 부분도 tanstack query로 수정 필요
     toast.promise(signOut(), {
       loading: "로그아웃 중...",
       success: () => {
