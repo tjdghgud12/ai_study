@@ -9,7 +9,12 @@ interface SignInWithTokenResponse {
   id: string;
 }
 
-const signIn = async (id: string, password: string): Promise<SignInResponse> => {
+interface SignInParams {
+  id: string;
+  password: string;
+}
+
+const signIn = async ({ id, password }: SignInParams): Promise<SignInResponse> => {
   const response = await fetch(`${process.env.NEXT_PUBLIC_CAT_AGENT_API}/api/sign-in`, {
     method: "POST",
     credentials: "include",

@@ -5,9 +5,7 @@ import { useMutation } from "@tanstack/react-query";
 
 const useSignIn = ({ onSuccess, onError }: { onSuccess?: (data: SignInResponse) => void; onError?: (error: HttpError) => void }) => {
   const mutation = useMutation({
-    mutationFn: async ({ id, password }: { id: string; password: string }) => {
-      return await signIn(id, password);
-    },
+    mutationFn: signIn,
     onSuccess: (data) => {
       onSuccess?.(data);
     },
