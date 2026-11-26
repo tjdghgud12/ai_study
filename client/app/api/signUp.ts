@@ -6,7 +6,12 @@ interface SignUpResponse {
   id: string;
 }
 
-const signUp = async (id: string, password: string): Promise<SignUpResponse> => {
+interface SignUpParams {
+  id: string;
+  password: string;
+}
+
+const signUp = async ({ id, password }: SignUpParams): Promise<SignUpResponse> => {
   const response = await fetch(`${process.env.NEXT_PUBLIC_CAT_AGENT_API}/api/sign-up`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -38,4 +43,4 @@ const checkId = async (id: string): Promise<CheckDuplicateIdResponse> => {
   return response.json() as Promise<CheckDuplicateIdResponse>;
 };
 
-export { checkId, signUp };
+export { checkId, signUp, type SignUpResponse };

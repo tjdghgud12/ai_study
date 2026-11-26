@@ -13,7 +13,8 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/in
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-import { checkId, signUp } from "@/app/api/signUp";
+import { checkId } from "@/app/api/signUp";
+import useSignUp from "@/hooks/queries/useSignUp";
 
 const formSchema = z
   .object({
@@ -30,6 +31,15 @@ const Signup = () => {
   const router = useRouter();
   const [seePassword, setSeePassword] = useState(false);
   const [seePasswordConfirm, setSeePasswordConfirm] = useState(false);
+  const { mutate: signUp } = useSignUp({
+    onSuccess: () => {
+      toast.success("회원가입을 완료하였습니다.");
+      router.push("/signin");
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: standardSchemaResolver(formSchema),
@@ -66,16 +76,9 @@ const Signup = () => {
       return;
     }
 
-    toast.promise(signUp(data.id, data.password), {
-      loading: "로딩 중",
-      success: () => {
-        router.push("/signin");
-        return "회원가입을 완료하였습니다.";
-      },
-      error: () => {
-        return "회원가입에 실패하였습니다.";
-      },
-    });
+    toast.loading("로딩 중");
+
+    signUp({ id: data.id, password: data.password });
   };
 
   return (
